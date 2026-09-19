@@ -167,8 +167,12 @@ async function refreshSession(refreshToken) {
     emitAuth("TOKEN_REFRESHED", session);
     return session;
   } catch (error) {
-    writeStoredSession(null);
-    emitAuth("SIGNED_OUT", null);
+    // Uma queda de rede ou erro 5xx nao significa que a sessao foi revogada.
+    // Preservar o refresh token para uma nova tentativa, sem permitir uso de token vencido.
+    if (/invalid.*refresh|refresh.*invalid|refresh.*expired|session.*not.*found|invalid_grant/i.test(String(error?.message || "")) || error?.code === "refresh_token_not_found") {
+      writeStoredSession(null);
+      emitAuth("SIGNED_OUT", null);
+    }
     throw error;
   }
 }
@@ -341,7 +345,7 @@ class EquipaSupabaseClient {
         }
         return { data: { session: session || null }, error: null };
       } catch (error) {
-        writeStoredSession(null);
+        // Falha temporaria de rede nao autoriza descartar o refresh token salvo.
         return { data: { session: null }, error: errorFromPayload(error) };
       }
     },

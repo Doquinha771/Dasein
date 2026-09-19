@@ -1211,3 +1211,43 @@ html[data-theme="dark"] .ref-form-grid input,html[data-theme="dark"] .ref-form-g
 @media(max-width:820px){
   .topbar-right>.topbar-tool#topbar-theme{display:grid!important;place-items:center!important;visibility:visible!important;min-width:42px!important;width:42px!important;min-height:44px!important;height:44px!important}
 }
+
+/* 0.2.1.1 Mobile-first: alvos de toque, campos legiveis e tratamento de espacos. */
+.startup-diagnostic{display:block;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.startup-error-card{max-width:min(460px,calc(100vw - 28px));padding:clamp(20px,5vw,32px)}
+@media (max-width:820px){
+  html,body,#app,.app-shell,.main,.content{max-width:100%;min-width:0}
+  .content{padding-inline:14px!important;padding-bottom:calc(110px + env(safe-area-inset-bottom))!important}
+  .auth-side{min-height:100dvh!important;padding:calc(20px + env(safe-area-inset-top)) 16px calc(22px + env(safe-area-inset-bottom))!important}
+  .auth-card{width:100%!important;max-width:480px!important;padding:24px 20px!important;border-radius:20px!important}
+  .auth-card h2{font-size:clamp(23px,7vw,30px)!important}
+  input:not([type="checkbox"]):not([type="radio"]),select,textarea{max-width:100%;min-width:0;min-height:48px!important;font-size:16px!important;line-height:1.35!important}
+  textarea{min-height:100px!important}
+  .auth-form label,.form-grid label,.filter-grid label,.ref-form-grid label{min-width:0;overflow-wrap:anywhere;gap:7px!important;font-size:13px!important;line-height:1.4!important}
+  .button,.icon-button,.nav-button,.filter-button,.auth-tab{min-height:44px!important}
+  .auth-form .button.primary{min-height:50px!important}
+  .form-grid,.ref-form-grid,.ea-user-controls{max-width:100%;min-width:0}
+  .panel,.workspace-panel,.ea-card,.ea-stat,.modal,.ref-modal-content,.ref-modal-body{max-width:100%;min-width:0;overflow-wrap:anywhere}
+  .modal-backdrop{max-width:100vw!important}
+  .modal .modal-actions{gap:10px!important}
+  .modal .modal-actions .button{font-size:14px!important;min-height:48px!important}
+  .ea-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .ea-stat{padding:14px!important;min-width:0!important}
+  .ea-stat-info strong{overflow-wrap:anywhere;font-size:clamp(18px,5vw,25px)!important}
+  .ea-stat>button{min-height:44px!important;white-space:normal!important;overflow-wrap:anywhere!important}
+  .ea-user-controls{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:8px!important}
+  .ea-table-scroller,.report-table-wrap,.eq-intake-table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  .startup-error-actions{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+  .startup-error-actions .button{width:100%}
+}
+@media (max-width:420px){
+  .ea-stats{grid-template-columns:minmax(0,1fr)!important}
+  .auth-card{padding:20px 16px!important}
+  .modal .modal-body{padding-inline:14px!important}
+  .modal .modal-actions{margin-inline:-14px!important;padding-inline:14px!important}
+}
+@media (max-width:820px){
+  .auth-side{display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;gap:18px!important}
+  .auth-watermark{width:100%!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:0 16px!important;margin:0!important;text-align:center!important}
+}
+@media (max-width:820px){.auth-watermark{width:auto!important;max-width:100%!important;align-self:stretch!important;box-sizing:border-box!important}}

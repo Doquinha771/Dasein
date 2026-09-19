@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
+const migration=read('supabase/migrations/20260919210000_equipa_0_2_1_1_mobile_recovery_storage.sql');
+const app=read('assets/js/app.js');
+const client=read('assets/js/supabase.js');
+const css=read('assets/css/style.css');
+assert.match(migration,/pg_database_size\(current_database\(\)\)/);
+assert.match(migration,/private\.equipa_prune_audit_on_pressure\(\)/);
+assert.match(migration,/where occurred_at < now\(\) - interval '30 days'/);
+assert.match(migration,/limit 500 for update skip locked/);
+assert.match(migration,/for v_i in 1\.\.8 loop/);
+assert.match(migration,/cron\.schedule\('equipa-audit-pressure'/);
+const deletes=[...migration.matchAll(/delete\s+from\s+([\w.]+)/gi)].map(x=>x[1].toLowerCase());
+assert.deepEqual(deletes,['public.audit_events'],'A limpeza por pressao so pode apagar audit_events');
+assert(!/truncate\s|drop\s+table\s|delete\s+from\s+public\.equipments/i.test(migration));
+assert.match(migration,/EQUIPA_ADMIN_REQUIRED/);
+assert.match(migration,/revoke all on function private\.equipa_prune_audit_on_pressure\(\) from public,anon,authenticated,service_role/);
+assert.match(app,/equipa_admin_capacity/);
+assert.match(app,/EQUIPA_PROFILE_UNAVAILABLE/);
+assert.match(client,/Falha temporaria de rede nao autoriza descartar o refresh token/);
+assert.match(css,/font-size:16px!important/);
+for(const name of ['index.html','assets/js/config.js','assets/js/app.js','assets/js/supabase.js'])
+  assert(!/sb_secret_[a-z0-9_]+/i.test(read(name)),'Segredo encontrado no browser: '+name);
+console.log('Hotfix integrity: 15 checks passed (cleanup audit-only, grants, browser and mobile).');

@@ -101,6 +101,12 @@ function maskEmail(v = "") {
 }
 function errText(error) {
   const raw = error?.message || String(error || "Erro inesperado");
+  if (/failed to fetch|networkerror|network request failed|tempo limite|timeout|aborterror/i.test(raw))
+    return "Sem resposta do servidor. Verifique a conexão e o estado do projeto Supabase; seus dados locais de sessão foram preservados.";
+  if (/PGRST202|PGRST204|PGRST205|PGRST200|PGRST106|PGRST116|42703|42P01|42883|schema cache|could not find the function|does not exist/i.test(`${error?.code || ""} ${raw}`))
+    return "O site e o banco estão com versões incompatíveis ou faltam permissões/tabelas. A administração deve verificar as migrations e o diagnóstico SQL do pacote.";
+  if (/read.only|read only|25006|exceeded.*quota/i.test(`${error?.code || ""} ${raw}`))
+    return "O banco está em modo somente leitura ou perto do limite. Verifique a capacidade no painel Supabase; nenhuma informação operacional será apagada.";
   if (/foreign key constraint|violates foreign key|23503/i.test(raw))
     return "Este registro possui histórico relacionado. Desative o equipamento em vez de excluí-lo.";
   if (/EQUIPA_RETURN_BEFORE_DEACTIVATE/.test(raw))
@@ -1317,7 +1323,7 @@ async function renderAdmin(){
   go("#ea-storage-details",()=>{
     const summary=qs("#ea-db-usage")?.textContent||"Indisponível";
     const info=qs("#ea-db-subtitle")?.textContent||"";
-    makeModal(`<div class="panel-head"><div><span class="eyebrow">Armazenamento</span><h2>Capacidade do banco</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><p><strong>Uso informado pelo Supabase: ${esc(summary)}</strong></p><p class="muted">${esc(info)}</p><p class="muted">Consulte a capacidade real e faça manutenção no painel autorizado do projeto. Não há limpeza destrutiva automática neste botão.</p><div class="modal-actions"><button class="button primary" type="button" data-close>Entendi</button></div></div>`);
+    makeModal(`<div class="panel-head"><div><span class="eyebrow">Armazenamento</span><h2>Capacidade do banco</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><p><strong>Banco de dados: ${esc(summary)}</strong></p><p class="muted">${esc(info)}</p><p class="muted">A limpeza automática, quando ativada no Supabase Cron, remove somente auditorias com mais de 30 dias caso o banco alcance o limite preventivo. Equipamentos, QR Codes, reservas, retiradas e históricos de uso são preservados. Excluir registros não reduz necessariamente o tamanho físico antes do autovacuum.</p><div class="modal-actions"><button class="button primary" type="button" data-close>Entendi</button></div></div>`);
   });
   go("#ea-import",()=>window.EquipaInventory?.openHub("import"));
   go("#ea-export",exportEquipments);
@@ -1339,16 +1345,20 @@ async function loadAdminUsers(){
   const pager=qs("#ea-user-pagination");if(pager){pager.innerHTML=`<span>Página ${state.adminUserPage+1} de ${equipaAdminUserMeta.pages} · ${Number(payload.filtered_total||0)} resultado(s)</span><div><button class="button small" id="ea-user-prev" ${state.adminUserPage===0?'disabled':''}>Anterior</button><button class="button small" id="ea-user-next" ${state.adminUserPage+1>=equipaAdminUserMeta.pages?'disabled':''}>Próxima</button></div>`;qs("#ea-user-prev")?.addEventListener("click",()=>{state.adminUserPage--;loadAdminUsers()});qs("#ea-user-next")?.addEventListener("click",()=>{state.adminUserPage++;loadAdminUsers()})}
 }
 async function equipaAdminLoadCapacity(){
-  const {data,error}=await supabase.rpc("admin_capacity_status");
+  let {data,error}=await supabase.rpc("equipa_admin_capacity");
+  let legacy=false;
+  if(error){legacy=true;({data,error}=await supabase.rpc("admin_capacity_status"));}
   const value=qs("#ea-db-usage"),fill=qs("#ea-db-fill"),subtitle=qs("#ea-db-subtitle");
   if(!value)return;
-  if(error){value.textContent="Indisponível";if(subtitle)subtitle.textContent="Não foi possível consultar a capacidade.";return}
+  if(error){value.textContent="Indisponível";if(subtitle)subtitle.textContent="O servidor não respondeu. Verifique a migration de capacidade.";return}
   const x=Array.isArray(data)?data[0]:data;
-  if(!x || !Number.isFinite(Number(x.database_mb))){value.textContent="Indisponível";return}
-  const mb=Number(x.database_mb),limit=Number(x.free_limit_mb),percent=limit>0?100*mb/limit:0;
+  const mb=legacy?Number(x?.database_mb):Number(x?.database_bytes)/1000000;
+  const limit=legacy?Number(x?.free_limit_mb):500;
+  if(!Number.isFinite(mb)){value.textContent="Indisponível";return}
+  const percent=limit>0?100*mb/limit:0;
   value.textContent=`${mb.toLocaleString("pt-BR",{maximumFractionDigits:2})} MB`;
   if(fill)fill.style.width=`${Math.max(0,Math.min(100,percent))}%`;
-  if(subtitle)subtitle.textContent=limit>0?`${percent.toLocaleString("pt-BR",{maximumFractionDigits:2})}% de ${limit} MB utilizados`:`Uso atual do banco`;
+  if(subtitle)subtitle.textContent=legacy?`${percent.toLocaleString("pt-BR",{maximumFractionDigits:1})}% de ${limit} MB · atualizar migration de capacidade`:`${percent.toLocaleString("pt-BR",{maximumFractionDigits:1})}% de 500 MB · auditorias ${(Number(x.audit_bytes||0)/1000000).toFixed(1)} MB · limpeza ${x.auto_cleanup_enabled?'ativa':'não agendada'}${x.warning?' · atenção ao limite':''}`;
 }
 async function equipaAdminLoadEquipmentCount(){
   const target=qs("#ea-equipment-count");if(!target)return;
@@ -1492,7 +1502,8 @@ function showBootLoader() {
 function renderStartupError(error) {
   console.error("Equipa startup:", error);
   window.__equipaBootReady?.();
-  app.innerHTML = `<main class="boot boot-error"><div class="startup-error-card"><strong>Não foi possível abrir o Equipa.</strong><span>${esc(errText(error))}</span><div class="startup-error-actions"><button class="button primary" id="startup-retry" type="button">Tentar novamente</button><button class="button ghost" id="startup-signout" type="button">Abrir login</button></div></div></main>`;
+  const code = /^[A-Z0-9_]{3,32}$/.test(String(error?.code || "")) ? error.code : "SEM_CODIGO";
+  app.innerHTML = `<main class="boot boot-error"><div class="startup-error-card" role="alert"><span class="eyebrow">Diagnóstico de inicialização</span><strong>Não foi possível carregar o painel.</strong><span>${esc(errText(error))}</span><small class="startup-diagnostic">Código: ${esc(code)}. Envie esse código à administração, sem compartilhar sua senha.</small><div class="startup-error-actions"><button class="button primary" id="startup-retry" type="button">Tentar novamente</button><button class="button ghost" id="startup-signout" type="button">Abrir login</button></div></div></main>`;
   qs("#startup-retry")?.addEventListener("click", () => boot());
   qs("#startup-signout")?.addEventListener("click", async () => {
     try { await withTimeout(supabase.auth.signOut(), 6000, "saída da conta"); } catch {}
@@ -1510,14 +1521,10 @@ async function initSession(session) {
     await withTimeout(loadProfile(), STARTUP_TIMEOUT_MS, "perfil escolar");
   } catch (error) {
     const message = String(error?.message || error || "");
-    if (/perfil|row|not found|PGRST116/i.test(message)) {
-      try { await withTimeout(supabase.auth.signOut(), 6000, "saída da conta"); } catch {}
-      state.session = null;
-      state.profile = null;
-      renderAuth(null);
-      notify("Sua conta existe, mas o perfil escolar ainda não foi criado.", "error");
-      window.__equipaBootReady?.();
-      return;
+    // Uma policy RLS ausente tambem pode produzir 0 linhas. Nao destruir a sessao
+    // nem declarar o usuario inexistente enquanto o banco estiver quebrado.
+    if (error?.code === "PGRST116" || /0 rows|no rows/i.test(message)) {
+      throw Object.assign(new Error("Perfil escolar indisponível. Confirme se o cadastro existe e se as permissões do banco estão ativas."), { code: "EQUIPA_PROFILE_UNAVAILABLE" });
     }
     throw error;
   }

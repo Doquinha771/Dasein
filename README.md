@@ -4,7 +4,7 @@
 
 **Gestão responsável de equipamentos escolares.**
 
-![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1--alpha-5d666d?style=for-the-badge)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1.1--alpha-5d666d?style=for-the-badge)
 ![Plataforma](https://img.shields.io/badge/plataforma-web-69737a?style=for-the-badge)
 ![Estado](https://img.shields.io/badge/estado-alpha%20em%20testes-78838a?style=for-the-badge)
 ![Privacidade](https://img.shields.io/badge/privacidade-LGPD-626d74?style=for-the-badge)
@@ -107,13 +107,18 @@ A área de auditoria permite acompanhar eventos relevantes, como alterações no
 
 ```text
 Nome        Equipa
-Versão      0.2.1 Alpha
+Versão      0.2.1.1 Alpha
 Plataforma  Web responsiva
 Uso         Gestão de equipamentos escolares
 Estado      Alpha · testes e piloto restrito
 ```
 
 Antes do piloto, consulte `RELATORIO-AUDITORIA-0.2.1.md`, `PILOT-TEST-MATRIX.md` e `supabase/DEPLOY-0.2.1-PILOT.md`.
+
+**Hotfix 0.2.1.1:** leia `HOTFIX-0.2.1.1.md` antes de atualizar o banco. O pacote inclui
+`supabase/DIAGNOSTICO-RECUPERACAO.sql`, `supabase/CALCULO-CAPACIDADE.sql` e
+`supabase/INSTALL-CRON.sql`. As migrations precisam ser executadas no projeto Supabase
+correto depois de backup, e a limpeza automática só funciona com Supabase Cron ativado.
 
 ---
 
