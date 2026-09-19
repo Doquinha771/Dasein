@@ -41,6 +41,9 @@ const state = {
   auditSearch: "",
   auditAction: "",
   auditEntity: "",
+  auditPage: 0,
+  adminUserPage: 0,
+  adminUserSearch: "",
   pendingScan: null
 };
 
@@ -1207,55 +1210,29 @@ async function loadReports() {
   host.innerHTML='<div class="loading" role="status">Atualizando relatório…</div>';
   if(button)button.disabled=true;
   try {
-    // A consolidação histórica vem do RPC. Nenhuma coluna fictícia e nenhum select *.
-    const summaryPromise=supabase.rpc("equipa_admin_reports",{p_from:startDate.toISOString(),p_to:endDate.toISOString()});
-    const countFor=stat=>{
-      if(status && stat!==status) return Promise.resolve({count:0,error:null});
-      let query=supabase.from("equipments").select("id",{count:"exact",head:true}).eq("is_active",true).eq("status",stat);
-      if(group)query=query.eq("school_group",group);
-      return query;
-    };
-    const baseCount=()=>{
-      let query=supabase.from("equipments").select("id",{count:"exact",head:true}).eq("is_active",true);
-      if(group)query=query.eq("school_group",group);
-      if(status)query=query.eq("status",status);
-      return query;
-    };
-    const settle=async promise=>{try{return await promise;}catch(error){return {data:null,error};}};
-    const [report,totalResult,availableResult,inUseResult,maintResult,unavailableResult] = await Promise.all([
-      settle(summaryPromise),settle(baseCount()),settle(countFor("available")),settle(countFor("in_use")),settle(countFor("maintenance")),settle(countFor("unavailable"))
-    ]);
+    const report=await supabase.rpc("equipa_admin_report_dashboard",{p_from:startDate.toISOString(),p_to:endDate.toISOString(),p_class:className||null,p_group:group||null,p_status:status||null});
     if(report.error)throw report.error;
     if(!report.data)throw new Error("O servidor não retornou indicadores para este período.");
-    for(const query of [totalResult,availableResult,inUseResult,maintResult,unavailableResult])if(query.error)throw query.error;
     if(!host.isConnected||request!==equipaReportRequest)return;
-    const totals={available:Number(availableResult.count||0),in_use:Number(inUseResult.count||0),maintenance:Number(maintResult.count||0),unavailable:Number(unavailableResult.count||0)};
-    const total=Number(totalResult.count||0);
+    const inventory=report.data.inventory||{};
+    const totals={available:Number(inventory.available||0),in_use:Number(inventory.in_use||0),maintenance:Number(inventory.maintenance||0),unavailable:Number(inventory.unavailable||0)};
+    const total=Number(inventory.total||0);
     // Limite explícito para não despejar todos os registros da escola no navegador.
     const chartDays=Math.min(60,Math.round((endDate-startDate)/86400000));
     const chartStart=new Date(endDate.getTime()-chartDays*86400000);
-    let activities=[];let chartError=false;
-    const [loans,bookings]=await Promise.all([
-      settle(supabase.from("withdrawals").select("id,class_name,withdrawn_at").gte("withdrawn_at",chartStart.toISOString()).lt("withdrawn_at",endDate.toISOString()).order("withdrawn_at",{ascending:false}).limit(500)),
-      settle(supabase.from("reservations").select("id,class_name,start_at").gte("start_at",chartStart.toISOString()).lt("start_at",endDate.toISOString()).order("start_at",{ascending:false}).limit(500))
-    ]);
-    if(loans.error||bookings.error)chartError=true;
-    else activities=[...(loans.data||[]).map(x=>({date:x.withdrawn_at,cls:x.class_name})),...(bookings.data||[]).map(x=>({date:x.start_at,cls:x.class_name}))];
-    if(!host.isConnected||request!==equipaReportRequest)return;
-    const byDay=new Map();
-    for(const record of activities){if(className&&!String(record.cls||"").toLowerCase().includes(className))continue;const day=String(record.date||"").slice(0,10);byDay.set(day,(byDay.get(day)||0)+1);}
+    const byDay=new Map((report.data.activity_days||[]).map(x=>[String(x.day),Number(x.total||0)]));
     const days=Array.from({length:chartDays},(_,i)=>new Date(chartStart.getTime()+i*86400000).toISOString().slice(0,10));
     const maxDay=Math.max(1,...byDay.values());
     const percent=v=>total?Math.round(v*100/total):0;
     const top=Array.isArray(report.data.top_equipment)?report.data.top_equipment.slice(0,8):[];
     const avg=report.data.avg_minutes==null?null:Number(report.data.avg_minutes);
-    const note='Indicadores históricos consideram o período; grupo e situação filtram a distribuição atual. Turma filtra apenas o gráfico de atividades.';
-    host.innerHTML=`<p class="report-scope-note">${esc(note)} ${chartError?'Não foi possível consultar o gráfico de atividades.':''}</p><div class="report-dashboard-grid">
+    const note='Indicadores históricos consideram o período; grupo e situação filtram a distribuição atual. Turma e grupo filtram o gráfico, agregado no servidor.';
+    host.innerHTML=`<p class="report-scope-note">${esc(note)}</p><div class="report-dashboard-grid">
       <section class="report-card report-usage-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("equipment",20)}</span><div><h3>Uso dos equipamentos</h3><p>Distribuição atual do inventário</p></div></div><div class="report-usage-body"><div class="report-donut" style="--p1:${percent(totals.in_use)}%;--p2:${percent(totals.in_use+totals.available)}%;--p3:${percent(totals.in_use+totals.available+totals.unavailable)}%"><div class="report-donut-center"><strong>${total}</strong><span>total</span></div></div><div class="report-legend"><div><i class="legend-green"></i><span>Em uso</span><b>${totals.in_use}</b><small>${percent(totals.in_use)}%</small></div><div><i class="legend-blue"></i><span>Disponíveis</span><b>${totals.available}</b><small>${percent(totals.available)}%</small></div><div><i class="legend-slate"></i><span>Indisponíveis</span><b>${totals.unavailable+totals.maintenance}</b><small>${percent(totals.unavailable+totals.maintenance)}%</small></div></div></div></section>
       <section class="report-card report-maint-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("maintenance",20)}</span><div><h3>Manutenções</h3><p>Pendências técnicas atuais</p></div></div><div class="report-center-metric"><strong>${Number(report.data.maintenance_open||0)}</strong><span>manutenções abertas</span></div><button class="report-inline-action" type="button" data-go-report-maint>Ver manutenções ${uiIcon("arrow",17)}</button></section>
       <section class="report-card report-time-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("history",20)}</span><div><h3>Tempo médio de uso</h3><p>Retiradas finalizadas no período</p></div></div><div class="report-center-metric"><strong>${Number.isFinite(avg)&&avg!==null?`${Math.round(avg)} min`:'—'}</strong><span>por equipamento devolvido</span></div><div class="report-note">Calculado com as devoluções registradas no período.</div></section>
       <section class="report-card report-table-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("reports",20)}</span><div><h3>Equipamentos mais utilizados</h3><p>Retiradas registradas no período</p></div></div><div class="report-table-wrap"><table class="report-table"><thead><tr><th>#</th><th>Equipamento</th><th>Retiradas</th></tr></thead><tbody>${top.length?top.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code||"Não informado")}</td><td>${Number(x.uses||0)}</td></tr>`).join(""):'<tr><td colspan="3" class="report-empty-cell">Sem movimentações no período.</td></tr>'}</tbody></table></div></section>
-      <section class="report-card report-chart-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><h3>Atividades por dia</h3><p>Retiradas e reservas · últimos ${chartDays} dias do intervalo</p></div></div><div class="report-bars">${days.map(day=>{const n=byDay.get(day)||0;return `<div class="report-bar-col"><div class="report-bar-track"><div class="report-bar-fill" style="height:${n?Math.max(6,Math.round(n/maxDay*100)):0}%"></div></div><span>${day.slice(8,10)}/${day.slice(5,7)}</span></div>`}).join("")}</div><p class="report-chart-note">${chartError?'Gráfico temporariamente indisponível.':'Até 500 eventos por tipo consultados para visualização.'}</p></section></div>`;
+      <section class="report-card report-chart-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><h3>Atividades por dia</h3><p>Retiradas e reservas · últimos ${chartDays} dias do intervalo</p></div></div><div class="report-bars">${days.map(day=>{const n=byDay.get(day)||0;return `<div class="report-bar-col"><div class="report-bar-track"><div class="report-bar-fill" style="height:${n?Math.max(6,Math.round(n/maxDay*100)):0}%"></div></div><span>${day.slice(8,10)}/${day.slice(5,7)}</span></div>`}).join("")}</div><p class="report-chart-note">Valores consolidados no PostgreSQL.</p></section></div>`;
     qs("[data-go-report-maint]")?.addEventListener("click",()=>navigate("maintenance"));
   }catch(error){console.warn("Falha ao carregar relatórios:",error);setMessage("Relatório indisponível",errText(error));}
   finally{if(button?.isConnected && request===equipaReportRequest)button.disabled=false;}
@@ -1278,6 +1255,7 @@ async function exportCurrentReport(){
 // Painel de administração: estatísticas reais, perfil mínimo e consulta sob demanda.
 let equipaAdminUsers = [];
 let equipaAdminRoleFilter = "";
+let equipaAdminUserMeta = {total:0,active:0,roles:0,pages:1};
 function equipaAdminUserStatus(u) {
   if (!u.is_active) return {label:"Acesso pendente/inativo",kind:"pending"};
   if (u.banned_until && new Date(u.banned_until).getTime()>Date.now()) return {label:"Banido",kind:"banned"};
@@ -1305,14 +1283,11 @@ function equipaAdminRenderUserRows() {
   }));
 }
 function equipaAdminRenderUserSummary(){
-  const rows=equipaAdminUsers;
-  const active=rows.filter(u=>u.is_active&&equipaAdminUserStatus(u).kind==="active").length;
-  const distinct=new Set(rows.map(u=>u.role).filter(Boolean)).size;
   const usersCount=qs("#ea-users-count"),rolesCount=qs("#ea-roles-count"),userDescription=qs("#ea-users-subtitle"),status=qs("#ea-users-caption");
-  if(usersCount)usersCount.textContent=String(rows.length);
-  if(rolesCount)rolesCount.textContent=String(distinct);
-  if(userDescription)userDescription.textContent=`${active} ativo(s) · ${rows.length-active} pendente(s), inativo(s) ou banido(s)`;
-  if(status)status.textContent=`${rows.length} conta(s) cadastrada(s)`;
+  if(usersCount)usersCount.textContent=String(equipaAdminUserMeta.total);
+  if(rolesCount)rolesCount.textContent=String(equipaAdminUserMeta.roles);
+  if(userDescription)userDescription.textContent=`${equipaAdminUserMeta.active} ativo(s) · ${Math.max(0,equipaAdminUserMeta.total-equipaAdminUserMeta.active)} pendente(s), inativo(s) ou banido(s)`;
+  if(status)status.textContent=`${equipaAdminUserMeta.total} conta(s) cadastrada(s)`;
 }
 async function renderAdmin(){
   if(state.profile.role!=="admin")return navigate("dashboard");
@@ -1326,8 +1301,8 @@ async function renderAdmin(){
       <section class="ea-stat ea-stat-orange"><span class="ea-stat-icon">${uiIcon("pie",25)}</span><div class="ea-stat-info"><h2>Armazenamento</h2><strong id="ea-db-usage" aria-live="polite">—</strong><div class="ea-storage-track"><div id="ea-db-fill" class="ea-storage-fill" style="width:0%"></div></div><p id="ea-db-subtitle">Consultando capacidade…</p></div><button type="button" id="ea-storage-details">Ver armazenamento ${uiIcon("arrow",16)}</button></section>
     </div>
     <div class="ea-main-grid"><section class="ea-card ea-users-panel" id="ea-users-section"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("admin",21)}</span><div><h2>Usuários e acessos</h2><p id="ea-users-caption">Contas cadastradas no sistema.</p></div><button class="button ghost ea-head-button" id="ea-see-all" type="button">Ver todos</button></header>
-    <div class="ea-user-controls"><label for="ea-role-filter">Filtrar por cargo</label><select id="ea-role-filter"><option value="">Todos os cargos</option><option value="student">Alunos</option><option value="teacher">Professores</option><option value="admin">Administradores</option></select></div>
-    <div class="ea-table-scroller"><table class="ea-users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="admin-users-table-body"><tr><td colspan="6" class="ea-empty">Carregando usuários…</td></tr></tbody></table></div>
+    <div class="ea-user-controls"><label for="ea-user-search">Buscar usuário</label><input class="search" id="ea-user-search" value="${esc(state.adminUserSearch)}" maxlength="80" placeholder="Nome do usuário"><label for="ea-role-filter">Filtrar por cargo</label><select id="ea-role-filter"><option value="">Todos os cargos</option><option value="student">Alunos</option><option value="teacher">Professores</option><option value="admin">Administradores</option></select></div>
+    <div class="ea-table-scroller"><table class="ea-users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="admin-users-table-body"><tr><td colspan="6" class="ea-empty">Carregando usuários…</td></tr></tbody></table></div><div class="pagination" id="ea-user-pagination"></div>
     </section><div class="ea-right-col"><section class="ea-card"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("maintenance",21)}</span><div><h2>Ferramentas rápidas</h2><p>Acesse as principais funcionalidades da administração.</p></div></header>
     <div class="ea-tools"><button type="button" id="ea-import">${uiIcon("upload",22)}<span><strong>Importar planilha</strong><small>CSV, Excel ou tabela Word</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-export">${uiIcon("upload",22)}<span><strong>Exportar inventário</strong><small>Planilha do cadastro atual</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-qrs">${uiIcon("grid",22)}<span><strong>QRs para impressão</strong><small>Etiquetas dos equipamentos</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-audit">${uiIcon("audit",22)}<span><strong>Abrir auditoria</strong><small>Consulte operações registradas</small></span>${uiIcon("arrow",15)}</button></div></section>
     <section class="ea-card"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("history",21)}</span><div><h2>Atividade recente</h2><p>Últimas operações registradas na auditoria.</p></div><button class="ea-activity-link" id="ea-all-activity" type="button">Ver todas</button></header><div id="ea-activity" class="ea-activity"><p class="ea-muted">Carregando atividades…</p></div></section></div></div>
@@ -1335,8 +1310,9 @@ async function renderAdmin(){
   const go=(id,cb)=>qs(id)?.addEventListener("click",cb);
   go("#ea-manage-users",()=>qs("#ea-users-section")?.scrollIntoView({block:"start",behavior:"smooth"}));
   go("#ea-manage-roles",()=>{qs("#ea-users-section")?.scrollIntoView({block:"start",behavior:"smooth"});qs("#ea-role-filter")?.focus()});
-  go("#ea-see-all",()=>{equipaAdminRoleFilter="";qs("#ea-role-filter").value="";equipaAdminRenderUserRows()});
-  qs("#ea-role-filter")?.addEventListener("change",e=>{equipaAdminRoleFilter=e.target.value;equipaAdminRenderUserRows()});
+  go("#ea-see-all",()=>{equipaAdminRoleFilter="";state.adminUserSearch="";state.adminUserPage=0;qs("#ea-role-filter").value="";qs("#ea-user-search").value="";loadAdminUsers()});
+  qs("#ea-role-filter")?.addEventListener("change",e=>{equipaAdminRoleFilter=e.target.value;state.adminUserPage=0;loadAdminUsers()});
+  let userSearchTimer;qs("#ea-user-search")?.addEventListener("input",e=>{clearTimeout(userSearchTimer);userSearchTimer=setTimeout(()=>{state.adminUserSearch=e.target.value.trim();state.adminUserPage=0;loadAdminUsers()},250)});
   go("#ea-go-equipment",()=>navigate("equipment"));
   go("#ea-storage-details",()=>{
     const summary=qs("#ea-db-usage")?.textContent||"Indisponível";
@@ -1351,11 +1327,16 @@ async function renderAdmin(){
   await Promise.allSettled([loadAdminUsers(),equipaAdminLoadCapacity(),equipaAdminLoadEquipmentCount(),equipaAdminLoadRecentActivity()]);
 }
 async function loadAdminUsers(){
-  const {data,error}=await supabase.rpc("admin_user_list_safe");
+  const pageSize=20;
+  const {data,error}=await supabase.rpc("equipa_admin_user_page",{p_page:state.adminUserPage,p_page_size:pageSize,p_role:equipaAdminRoleFilter||null,p_search:state.adminUserSearch||null});
   const host=qs("#admin-users-table-body");if(!host)return;
   if(error){host.innerHTML=`<tr><td colspan="6" class="ea-empty">Não foi possível carregar usuários: ${esc(errText(error))}</td></tr>`;return}
-  equipaAdminUsers=(data||[]).map(u=>({id:u.id,full_name:u.full_name,role:u.role,masked_email:u.masked_email,is_active:u.is_active,is_banned:!!(u.banned_until&&new Date(u.banned_until).getTime()>Date.now()),banned_until:u.banned_until}));
+  const payload=Array.isArray(data)?data[0]:data||{};
+  equipaAdminUsers=(payload.rows||[]).map(u=>({id:u.id,full_name:u.full_name,role:u.role,masked_email:u.masked_email,is_active:u.is_active,is_banned:!!(u.banned_until&&new Date(u.banned_until).getTime()>Date.now()),banned_until:u.banned_until}));
+  equipaAdminUserMeta={total:Number(payload.total||0),active:Number(payload.active||0),roles:Number(payload.roles||0),pages:Math.max(1,Math.ceil(Number(payload.filtered_total||0)/pageSize))};
+  if(state.adminUserPage>=equipaAdminUserMeta.pages){state.adminUserPage=Math.max(0,equipaAdminUserMeta.pages-1);return loadAdminUsers()}
   equipaAdminRenderUserSummary();equipaAdminRenderUserRows();
+  const pager=qs("#ea-user-pagination");if(pager){pager.innerHTML=`<span>Página ${state.adminUserPage+1} de ${equipaAdminUserMeta.pages} · ${Number(payload.filtered_total||0)} resultado(s)</span><div><button class="button small" id="ea-user-prev" ${state.adminUserPage===0?'disabled':''}>Anterior</button><button class="button small" id="ea-user-next" ${state.adminUserPage+1>=equipaAdminUserMeta.pages?'disabled':''}>Próxima</button></div>`;qs("#ea-user-prev")?.addEventListener("click",()=>{state.adminUserPage--;loadAdminUsers()});qs("#ea-user-next")?.addEventListener("click",()=>{state.adminUserPage++;loadAdminUsers()})}
 }
 async function equipaAdminLoadCapacity(){
   const {data,error}=await supabase.rpc("admin_capacity_status");
@@ -1389,7 +1370,7 @@ async function adminUserAction(u,action,hours=null){const labels={approve:"aprov
 function openBanUser(u){const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Controle de acesso</span><h2>Banir ${esc(u.full_name)}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><p class="muted">O banimento bloqueia novas autenticações pelo período escolhido. O histórico do usuário é preservado.</p><label>Duração<select id="ban-hours"><option value="24">24 horas</option><option value="168" selected>7 dias</option><option value="720">30 dias</option><option value="876000">Indeterminado</option></select></label><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button danger-solid" id="confirm-ban" type="button">Banir usuário</button></div></div>`);qs("#confirm-ban",m)?.addEventListener("click",()=>{const hours=Number(qs("#ban-hours",m).value);m.remove();adminUserAction(u,"ban",hours)})}
 
 async function renderAudit(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="audit";shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Rastreabilidade</span><h2>Auditoria</h2><p>Alterações de inventário, movimentações, usuários, reservas, carrinhos e aceite legal.</p></div></div><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input class="search" id="audit-search" value="${esc(state.auditSearch)}" placeholder="Buscar pessoa, resumo ou registro"><button class="filter-button" id="audit-filter-toggle" type="button"><span>Filtros</span></button></div></div><div class="filter-drawer" id="audit-filter-panel"><div class="filter-grid"><label>Tipo<select id="audit-entity"><option value="">Todos</option><option value="equipments">Equipamentos</option><option value="withdrawals">Retiradas</option><option value="withdrawal_items">Itens de retirada</option><option value="equipment_carts">Carrinhos</option><option value="reservations">Reservas</option><option value="maintenance_events">Manutenção</option><option value="profiles">Usuários</option><option value="user_access">Acesso de usuários</option><option value="legal_acceptances">Aceites legais</option></select></label><label>Ação<select id="audit-action"><option value="">Todas</option><option value="insert">Criação</option><option value="update">Alteração</option><option value="delete">Exclusão</option><option value="approve">Aprovação</option><option value="remove">Remoção de acesso</option><option value="ban">Banimento</option><option value="unban">Desbanimento</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="audit-clear">Limpar</button><button class="button primary small" id="audit-apply">Aplicar</button></div></div><div id="audit-results"><div class="loading">Carregando auditoria…</div></div></section>`);wireFilterToggle("audit-filter-toggle","audit-filter-panel");qs("#audit-entity").value=state.auditEntity;qs("#audit-action").value=state.auditAction;qs("#audit-apply")?.addEventListener("click",()=>{state.auditEntity=qs("#audit-entity").value;state.auditAction=qs("#audit-action").value;loadAudit()});qs("#audit-clear")?.addEventListener("click",()=>{state.auditEntity="";state.auditAction="";state.auditSearch="";renderAudit()});let timer;qs("#audit-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.auditSearch=e.target.value;loadAudit()},180)});await loadAudit()}
-async function loadAudit(){let q=supabase.from("audit_events").select("id,occurred_at,actor_name,action,entity_type,entity_id,summary,details").order("occurred_at",{ascending:false}).limit(500);if(state.auditEntity)q=q.eq("entity_type",state.auditEntity);if(state.auditAction)q=q.eq("action",state.auditAction);const {data,error}=await q;const h=qs("#audit-results");if(!h)return;if(error){h.innerHTML=`<div class="empty"><strong>Erro ao carregar auditoria.</strong><span>${esc(errText(error))}</span></div>`;return}let rows=smartFilter(data||[],state.auditSearch,x=>[x.actor_name,x.action,x.entity_type,x.entity_id,x.summary]);if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhum evento.</strong><span>Não há registros compatíveis com os filtros.</span></div>`;return}h.innerHTML=`<div class="data-list">${rows.map(x=>`<button class="data-row" type="button" data-audit='${esc(JSON.stringify(x))}'><div class="data-main"><strong>${esc(x.actor_name||"Sistema")} · ${esc(auditActionLabel(x.action))}</strong><span>${esc(auditEntityLabel(x.entity_type))}${x.entity_id?` · ${esc(x.entity_id)}`:""} · ${esc(x.summary||"")}</span></div><span class="status">${esc(auditActionLabel(x.action))}</span><span class="data-date">${esc(dt(x.occurred_at))}</span></button>`).join("")}</div>`;qsa("[data-audit]").forEach(b=>b.addEventListener("click",()=>openAuditDetail(JSON.parse(b.dataset.audit))))}
+async function loadAudit(){const pageSize=25;const {data,error}=await supabase.rpc("equipa_admin_audit_page",{p_page:state.auditPage,p_page_size:pageSize,p_entity:state.auditEntity||null,p_action:state.auditAction||null,p_search:state.auditSearch||null});const h=qs("#audit-results");if(!h)return;if(error){h.innerHTML=`<div class="empty"><strong>Erro ao carregar auditoria.</strong><span>${esc(errText(error))}</span><button class="button" id="audit-retry">Tentar novamente</button></div>`;qs("#audit-retry")?.addEventListener("click",loadAudit);return}const payload=Array.isArray(data)?data[0]:data||{};const rows=payload.rows||[];const total=Number(payload.total||0);const pages=Math.max(1,Math.ceil(total/pageSize));if(state.auditPage>=pages){state.auditPage=Math.max(0,pages-1);return loadAudit()}if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhum evento.</strong><span>Não há registros compatíveis com os filtros.</span></div>`;return}h.innerHTML=`<div class="data-list">${rows.map(x=>`<button class="data-row" type="button" data-audit='${esc(JSON.stringify(x))}'><div class="data-main"><strong>${esc(x.actor_name||"Sistema")} · ${esc(auditActionLabel(x.action))}</strong><span>${esc(auditEntityLabel(x.entity_type))}${x.entity_id?` · ${esc(x.entity_id)}`:""} · ${esc(x.summary||"")}</span></div><span class="status">${esc(auditActionLabel(x.action))}</span><span class="data-date">${esc(dt(x.occurred_at))}</span></button>`).join("")}</div><div class="pagination"><span>Página ${state.auditPage+1} de ${pages} · ${total} evento(s)</span><div><button class="button small" id="audit-prev" ${state.auditPage===0?'disabled':''}>Anterior</button><button class="button small" id="audit-next" ${state.auditPage+1>=pages?'disabled':''}>Próxima</button></div></div>`;qsa("[data-audit]").forEach(b=>b.addEventListener("click",()=>openAuditDetail(JSON.parse(b.dataset.audit))));qs("#audit-prev")?.addEventListener("click",()=>{state.auditPage--;loadAudit()});qs("#audit-next")?.addEventListener("click",()=>{state.auditPage++;loadAudit()})}
 function auditActionLabel(v){return({insert:"Criado",update:"Alterado",delete:"Excluído",approve:"Aprovado",restore:"Restaurado",remove:"Acesso removido",deactivate:"Desativado",ban:"Banido",unban:"Desbanido"})[v]||v||"Evento"}
 function auditEntityLabel(v){return({equipments:"Equipamento",withdrawals:"Retirada",withdrawal_items:"Item de retirada",equipment_carts:"Carrinho",equipment_cart_items:"Item do carrinho",reservations:"Reserva",maintenance_events:"Manutenção",profiles:"Usuário",user_access:"Acesso de usuário",legal_acceptances:"Aceite legal"})[v]||v||"Registro"}
 function openAuditDetail(x){const safe=JSON.stringify(x.details||{},null,2);makeModal(`<div class="panel-head"><div><span class="eyebrow">Auditoria</span><h2>${esc(auditActionLabel(x.action))} · ${esc(auditEntityLabel(x.entity_type))}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><div class="detail-grid">${detail("Responsável",x.actor_name)}${detail("Data",dt(x.occurred_at))}${detail("Registro",x.entity_id)}${detail("Resumo",x.summary)}</div><details class="audit-details"><summary>Detalhes técnicos</summary><pre>${esc(safe)}</pre></details></div>`,true)}

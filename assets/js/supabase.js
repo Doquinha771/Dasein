@@ -218,6 +218,7 @@ class QueryBuilder {
   update(value) { this.method = "PATCH"; this.body = value; return this; }
   delete() { this.method = "DELETE"; return this; }
   eq(column, value) { this.filters.push([column, `eq.${formatFilterValue(value)}`]); return this; }
+  ilike(column, value) { this.filters.push([column, `ilike.${formatFilterValue(value)}`]); return this; }
   gt(column, value) { this.filters.push([column, `gt.${formatFilterValue(value)}`]); return this; }
   gte(column, value) { this.filters.push([column, `gte.${formatFilterValue(value)}`]); return this; }
   lt(column, value) { this.filters.push([column, `lt.${formatFilterValue(value)}`]); return this; }

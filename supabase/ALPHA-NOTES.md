@@ -39,3 +39,12 @@ Para uma instalação totalmente nova, os arquivos históricos deste pacote pres
 - Importação DOCX requer tabela com cabeçalhos; documentos Word de texto livre não são interpretados.
 - PDF e importação Excel dependem de bibliotecas de carregamento sob demanda via CDN; o teste de composição PDF usou renderizador simulado, sendo necessária validação do download real no navegador da escola.
 - Antes do uso geral: testar duas sessões ADM confirmando o mesmo código simultaneamente, PDF impresso, arquivo real XLSX/DOCX e restauração a partir das migrations.
+
+## 0.2.1 Alpha — preparação do piloto
+
+- usuários e auditoria passaram a usar RPCs paginadas, busca limitada e filtros no servidor;
+- o gráfico diário de relatórios é agregado no PostgreSQL e não baixa reservas/retiradas completas para o navegador;
+- foi corrigida a ausência de `ilike` no cliente REST local, método já utilizado pelos filtros do inventário;
+- a retenção de auditoria possui apenas prévia de volume; nenhuma limpeza destrutiva é ativada sem política aprovada;
+- a Edge Function administrativa aceita uma allowlist em `EQUIPA_ALLOWED_ORIGINS` e não devolve detalhes internos em erros 500;
+- aplicar `20260919190000_equipa_0_2_1_pilot_readiness.sql` e seguir `DEPLOY-0.2.1-PILOT.md` antes de publicar.

@@ -1187,6 +1187,12 @@ html[data-theme="dark"] .ref-panel h2,html[data-theme="dark"] .ref-page-title h1
 html[data-theme="dark"] .ref-kpi p,html[data-theme="dark"] .ref-kpi span,html[data-theme="dark"] .report-card p,html[data-theme="dark"] .ea-stat p,html[data-theme="dark"] .ea-intro p,html[data-theme="dark"] .ea-card p,html[data-theme="dark"] .data-row span,html[data-theme="dark"] .ref-modal-tip p,html[data-theme="dark"] .ref-modal-nav-head p,html[data-theme="dark"] .ref-modal-top p,html[data-theme="dark"] .ref-modal-banner p,html[data-theme="dark"] .report-scope-note,html[data-theme="dark"] .report-chart-note,html[data-theme="dark"] .ref-welcome-date strong,html[data-theme="dark"] .ref-breadcrumb,html[data-theme="dark"] .eyebrow,html[data-theme="dark"] .muted{color:#b2c2d9!important}
 html[data-theme="dark"] .ref-inventory-table td,html[data-theme="dark"] .ref-inventory-table th,html[data-theme="dark"] .ea-users-table td,html[data-theme="dark"] .report-table td,html[data-theme="dark"] .report-table th,html[data-theme="dark"] .ea-event,html[data-theme="dark"] .report-legend span,html[data-theme="dark"] label{color:#e0ebfb!important;border-color:#40536e!important}
 html[data-theme="dark"] .pagination,html[data-theme="dark"] .toolbar,html[data-theme="dark"] .panel-head,html[data-theme="dark"] .report-card-head,html[data-theme="dark"] .ref-modal-top,html[data-theme="dark"] .ea-card-head,html[data-theme="dark"] .ea-user-controls{border-color:#40536e!important}
+
+/* 0.2.1 pilot: filtros administrativos paginados. */
+.ea-user-controls{flex-wrap:wrap}
+.ea-user-controls input,.ea-user-controls select{min-height:34px;border:1px solid #dfe7f3;border-radius:8px;padding:7px 10px;background:#fff;color:#28364c;font-size:12px}
+.ea-user-controls input{width:min(240px,100%)}
+html[data-theme="dark"] .ea-user-controls input,html[data-theme="dark"] .ea-user-controls select{background:#17253a;color:#e9f0fc;border-color:#40536e}
 html[data-theme="dark"] .equipa-notification-panel{background:#17253a;border-color:#526985;color:#eaf1ff}
 html[data-theme="dark"] .equipa-notification-head,html[data-theme="dark"] .equipa-notice-foot{border-color:#40536e}
 html[data-theme="dark"] .equipa-notification-head span,html[data-theme="dark"] .equipa-notice-item span,html[data-theme="dark"] .equipa-notice-empty{color:#b2c2d9}

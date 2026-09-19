@@ -49,6 +49,8 @@ Exportação de inventário
 Aprovação e controle de acesso de usuários
 Banimento e restauração de acesso
 Auditoria administrativa
+Paginação e busca administrativa no servidor
+Relatórios e gráficos agregados no PostgreSQL
 Termos de Uso versionados
 Política de Privacidade versionada
 Registro de aceite dos documentos legais
@@ -110,6 +112,8 @@ Plataforma  Web responsiva
 Uso         Gestão de equipamentos escolares
 Estado      Alpha · testes e piloto restrito
 ```
+
+Antes do piloto, consulte `RELATORIO-AUDITORIA-0.2.1.md`, `PILOT-TEST-MATRIX.md` e `supabase/DEPLOY-0.2.1-PILOT.md`.
 
 ---
 

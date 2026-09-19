@@ -1,6 +1,17 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
-const json = (body: unknown, status = 200, origin = "*") =>
+const allowedOrigins = new Set(
+  (Deno.env.get("EQUIPA_ALLOWED_ORIGINS") || "")
+    .split(",").map((value) => value.trim()).filter(Boolean)
+);
+
+const responseOrigin = (requestOrigin: string | null) => {
+  if (!requestOrigin) return "null";
+  if (allowedOrigins.size === 0) return requestOrigin;
+  return allowedOrigins.has(requestOrigin) ? requestOrigin : "null";
+};
+
+const json = (body: unknown, status = 200, origin = "null") =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
@@ -14,7 +25,9 @@ const json = (body: unknown, status = 200, origin = "*") =>
   });
 
 Deno.serve(async (req) => {
-  const origin = req.headers.get("origin") || "*";
+  const requestOrigin = req.headers.get("origin");
+  const origin = responseOrigin(requestOrigin);
+  if (requestOrigin && origin === "null") return json({ error: "ORIGIN_NOT_ALLOWED" }, 403, "null");
   if (req.method === "OPTIONS") return json({ ok: true }, 200, origin);
   if (req.method !== "POST") return json({ error: "METHOD_NOT_ALLOWED" }, 405, origin);
 
@@ -94,7 +107,7 @@ Deno.serve(async (req) => {
       return json({ error: "INVALID_ACTION" }, 400, origin);
     }
 
-    await admin.from("audit_events").insert({
+    const { error: auditError } = await admin.from("audit_events").insert({
       actor_id: caller.id,
       actor_name: callerProfile.full_name,
       action,
@@ -103,9 +116,11 @@ Deno.serve(async (req) => {
       summary,
       details: { ...details, target_name: targetProfile.full_name, target_role: targetProfile.role }
     });
+    if (auditError) throw auditError;
 
     return json({ ok: true, action, userId: targetUserId }, 200, origin);
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "INTERNAL_ERROR" }, 500, req.headers.get("origin") || "*");
+    console.error("equipa-admin-users", error);
+    return json({ error: "INTERNAL_ERROR" }, 500, responseOrigin(req.headers.get("origin")));
   }
 });
