@@ -1023,3 +1023,119 @@ body{background:#f9fbff;color:var(--ink);font-family:Inter,"Segoe UI Variable","
 }
 
 @media(max-width:820px){.ref-row-more{white-space:nowrap!important;font-size:12px!important}.mobile-more-sheet .mobile-sheet-head{position:sticky;top:0;z-index:2;background:#fff;padding-bottom:12px}}
+
+/* ==============================================================
+   Equipa 0.2.1 Alpha — Desktop / dialog layout hotfix
+   Desktop retains the user's 120% reading scale. Overrides target
+   the real causes of clipped dialogs and 821–1170px overflow.
+   ============================================================== */
+@media (min-width: 821px) {
+  /* The browser's CSS zoom also scales viewport-height CSS values.
+     83.333dvh compensates for 120% and keeps the centered dialog visible. */
+  .modal-backdrop:has(.ref-modal-shell){
+    padding:18px !important;
+    align-items:center;
+    justify-items:center;
+    overflow:hidden;
+  }
+  .modal.wide:has(.ref-modal-shell){
+    width:min(940px, calc(83.333vw - 48px)) !important;
+    height:min(780px, calc(83.333dvh - 48px)) !important;
+    min-height:0 !important;
+    max-height:calc(83.333dvh - 48px) !important;
+    border-radius:18px;
+    display:block;
+    overflow:hidden !important;
+    animation:none;
+  }
+  .modal:has(.ref-modal-shell) .ref-modal-shell{
+    display:grid;
+    grid-template-columns:clamp(205px,25%,270px) minmax(0,1fr);
+    grid-template-rows:minmax(0,1fr);
+    height:100%;
+    min-height:0;
+    max-height:100%;
+    overflow:hidden;
+  }
+  .modal:has(.ref-modal-shell) .ref-modal-nav{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    min-height:0;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    gap:16px;
+    padding:20px 15px;
+  }
+  .modal:has(.ref-modal-shell) .ref-modal-nav-list{display:grid;gap:8px;flex:0 0 auto;min-width:0}
+  .modal:has(.ref-modal-shell) .ref-modal-nav-item{min-width:0;padding:11px 10px;gap:8px}
+  .modal:has(.ref-modal-shell) .ref-modal-tip{margin-top:auto;align-self:stretch}
+  .modal:has(.ref-modal-shell) .ref-modal-content{
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    min-height:0;
+    height:100%;
+    overflow:hidden;
+  }
+  .modal:has(.ref-modal-shell) .ref-modal-top,
+  .modal:has(.ref-modal-shell) .ref-modal-banner{flex:0 0 auto}
+  .modal:has(.ref-modal-shell) .ref-modal-top{padding:17px 20px 14px}
+  .modal:has(.ref-modal-shell) .ref-modal-top h2{font-size:22px}
+  .modal:has(.ref-modal-shell) .ref-modal-banner{margin:12px 20px 0;padding:12px 14px}
+  .modal:has(.ref-modal-shell) .ref-modal-body,
+  .modal:has(.ref-modal-shell) .ref-register-workspace{
+    flex:1 1 auto;
+    min-width:0;
+    min-height:0;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+    padding:16px 20px 22px;
+  }
+  .modal:has(.ref-modal-shell) .ref-form-grid{gap:12px}
+  .modal:has(.ref-modal-shell) .ref-form-grid input,
+  .modal:has(.ref-modal-shell) .ref-form-grid select{min-height:43px}
+  .modal:has(.ref-modal-shell) .ref-form-grid textarea{min-height:76px}
+  .modal:has(.ref-modal-shell) .ref-form-actions,
+  .modal:has(.ref-modal-shell) .eq-intake-actions{padding-bottom:12px;background:#fff}
+  /* Registration preview can have hundreds of records: its own scrolling
+     stays within the modal, never grows past the viewport. */
+  .modal:has(.ref-register-modal) .eq-intake-table-wrap{max-height:min(410px,45dvh);overflow:auto}
+  .app-shell > .main{box-sizing:border-box;min-width:0;max-width:calc(100% - var(--equipa-sidebar-width));}
+  .main > .topbar,.main > .content{max-width:100%;min-width:0;box-sizing:border-box}
+}
+
+/* At tablet-sized desktop viewports the full sidebar consumes too much
+   of the viewport at 120%: switch to a fixed icon rail, not mobile UI. */
+@media (min-width: 821px) and (max-width: 1170px) {
+  .app-shell{--equipa-sidebar-width:82px}
+  .app-shell > .sidebar{align-items:center!important;padding:14px 7px!important}
+  .app-shell > .sidebar .sidebar-brand{justify-content:center!important;gap:0!important;padding:4px 0 24px!important}
+  .app-shell > .sidebar .brand-copy,
+  .app-shell > .sidebar .nav-label,
+  .app-shell > .sidebar .sidebar-user{display:none!important}
+  .app-shell > .sidebar .brandmark{width:46px!important;height:46px!important;font-size:20px!important}
+  .app-shell > .sidebar .nav{display:grid!important;justify-items:center!important;gap:5px!important;padding:0!important}
+  .app-shell > .sidebar .nav-button{display:grid!important;place-items:center!important;width:54px!important;min-width:0!important;height:50px!important;min-height:50px!important;margin:0!important;padding:0!important;gap:0!important}
+  .app-shell > .sidebar .nav-symbol{margin:0!important}
+  .app-shell > .sidebar .logout-button{width:54px!important;height:48px!important;margin-top:auto!important;padding:0!important;display:grid!important;place-items:center!important}
+  .app-shell > .sidebar .logout-button span{display:none!important}
+  .main > .topbar{padding-left:15px!important;padding-right:15px!important;gap:9px!important}
+  .main > .content,.content:not(.view-dashboard){padding:18px 17px 40px!important}
+  .main .ref-topbar-school-copy{display:none}
+  /* Do not trigger the stacked/mobile dialog layout at 900px desktop. */
+  .modal:has(.ref-modal-shell) .ref-modal-shell{grid-template-columns:205px minmax(0,1fr)!important}
+  .modal:has(.ref-modal-shell) .ref-modal-nav-list{grid-template-columns:1fr!important}
+}
+@media (min-width:821px) and (max-height:650px){
+  .modal.wide:has(.ref-modal-shell){height:calc(83.333dvh - 26px)!important;max-height:calc(83.333dvh - 26px)!important}
+  .modal:has(.ref-modal-shell) .ref-modal-tip{display:none}
+}
+@media (min-width:821px) and (max-width:850px){
+  /* The school name and both topbar buttons exceeded 821px at 120% zoom. */
+  .main .topbar-right .school-identification{display:none!important}
+  .main .topbar-right{min-width:0!important;gap:7px!important}
+}
