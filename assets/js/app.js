@@ -8,7 +8,7 @@ const state = {
   view: "dashboard",
   equipmentPage: 0,
   equipmentSearch: "",
-  equipmentFilters: { status: "", active: "active", group: "" },
+  equipmentFilters: { status: "", active: "active", group: "", location:"", model:"" },
   withdrawalsSearch: "",
   withdrawalsStatus: "",
   withdrawalsDue: new Map(),
@@ -338,7 +338,39 @@ function greeting() {
   if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
-function icon() { return ""; }
+const UI_GLYPHS = {
+ dashboard:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+ equipment:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+ withdrawals:'<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
+ reservations:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/>',
+ history:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ carts:'<path d="M3 4h2l2.5 12h11l2-9H6M9 20h.01M17 20h.01"/>',
+ maintenance:'<path d="M14 6a5 5 0 0 0-6 6l-5 5a2 2 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-4-4z"/>',
+ reports:'<path d="M4 20V11m5 9V4m5 16v-7m5 7V8"/>',
+ audit:'<path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6zM12 8v5m0 3h.01"/>',
+ admin:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 2l-2 2a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1 1.64h-2.8a1.8 1.8 0 0 0-1-1.64 1.8 1.8 0 0 0-2 .36l-2-2a1.8 1.8 0 0 0 .36-2A1.8 1.8 0 0 0 4.7 14H3v-4h1.7a1.8 1.8 0 0 0 1.64-1 1.8 1.8 0 0 0-.36-2l2-2a1.8 1.8 0 0 0 2 .36A1.8 1.8 0 0 0 11 3.7h2.8a1.8 1.8 0 0 0 1 1.64 1.8 1.8 0 0 0 2-.36l2 2a1.8 1.8 0 0 0-.36 2A1.8 1.8 0 0 0 20 10h1v4h-1a1.8 1.8 0 0 0-1.6 1z"/>',
+ search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+ bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9M10 21h4"/>',
+ sun:'<circle cx="12" cy="12" r="4"/><path d="M12 1v2m0 18v2M1 12h2m18 0h2M4 4l1.5 1.5M18.5 18.5 20 20M20 4l-1.5 1.5M5.5 18.5 4 20"/>',
+ school:'<path d="M3 21V8l9-5 9 5v13M2 21h20M7 11h2m6 0h2m-10 4h2m6 0h2M10 21v-5h4v5"/>',
+ filter:'<path d="M4 5h16l-6.5 8v6l-3 2v-8z"/>',
+ tag:'<path d="M20 13 12 21 3 12V3h9zM7.5 7.5h.01"/>',
+ upload:'<path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/>',
+ plus:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ arrow:'<path d="m9 5 7 7-7 7"/>',
+ rotate:'<path d="M20 7v5h-5M4 17v-5h5M5 9a8 8 0 0 1 14-2M19 15a8 8 0 0 1-14 2"/>',
+ pie:'<path d="M12 3v9h9a9 9 0 1 1-9-9M15 2a9 9 0 0 1 7 7h-7z"/>',
+ inbox:'<path d="M4 5h16l2 11v5H2v-5zM2 16h6l2 3h4l2-3h6"/>',
+ warning:'<path d="m12 3 10 18H2zM12 9v5m0 3h.01"/>',
+ lightning:'<path d="m13 2-9 11h7l-1 9 10-12h-7z"/>',
+ check:'<path d="M5 12l5 5L20 7"/>',
+ logout:'<path d="M10 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5M14 7l5 5-5 5M9 12h10"/>'
+};
+function uiIcon(name, size=19) { const p=UI_GLYPHS[name]||UI_GLYPHS.grid;return `<svg class="ui-icon" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`; }
+function icon(name){return uiIcon(name);}
+
 function cleanupTransientUi(){closeContextMenu?.();qs("#filter-mobile-shade")?.remove();document.body.classList.remove("filter-sheet-open");}
 function renderPendingApproval(){app.innerHTML=`<main class="pending-access"><div class="pending-card"><div class="brandmark">E</div><span class="eyebrow">Equipa</span><h1>Acesso indisponível</h1><p>Esta conta está aguardando aprovação, suspensa ou teve o acesso removido pela administração da escola. Nenhum inventário ou histórico fica disponível enquanto o acesso não estiver liberado.</p><button class="button primary" id="pending-signout" type="button">Sair da conta</button></div><footer class="equipa-watermark standalone">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer></main>`;qs("#pending-signout")?.addEventListener("click",()=>supabase.auth.signOut());}
 function shell(content) {
@@ -351,18 +383,18 @@ function shell(content) {
       <nav class="nav" aria-label="Navegação principal">
         ${nav("dashboard","Início")}${nav("equipment","Equipamentos")}${nav("withdrawals","Retiradas")}${nav("reservations","Reservas")}${nav("history","Histórico")}${nav("carts","Carrinhos")}${admin ? nav("maintenance","Manutenção") + nav("reports","Relatórios") + nav("audit","Auditoria") + nav("admin","Administração") : ""}
       </nav>
-      <div class="sidebar-user sidebar-user-simple"><button class="logout-button" id="logout" title="Sair" aria-label="Sair">Sair</button></div>
+      <div class="sidebar-user"><div class="sidebar-user-avatar" aria-hidden="true">${esc(firstName().slice(0,1).toUpperCase())}</div><div class="sidebar-user-copy"><strong>${esc(state.profile?.full_name||"Usuário")}</strong><span>${esc(roleLabel(state.profile?.role))}</span></div></div><button class="logout-button" id="logout" title="Sair da conta" aria-label="Sair">${uiIcon("logout",18)}<span>Sair</span></button>
     </aside>
     <section class="main">
       <header class="topbar">
-        <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu">☰</button><div><span class="topbar-kicker">Equipa</span><strong>${esc(pageTitle())}</strong></div></div>
-        <form class="global-search" id="global-search-form" role="search"><input id="global-search" type="search" value="${esc(currentGlobalSearchValue())}" placeholder="Pesquisar equipamento, turma, aluno ou manutenção" autocomplete="off"></form>
-        <button class="account-chip" id="account-chip" type="button"><span><strong>Conta</strong><small>${esc(roleLabel(state.profile?.role))}</small></span></button>
+        <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu">☰</button><div class="mobile-top-name"><span class="topbar-kicker">Equipa</span><strong>${esc(pageTitle())}</strong></div></div>
+        <form class="global-search" id="global-search-form" role="search">${uiIcon("search",18)}<input id="global-search" type="search" value="${esc(currentGlobalSearchValue())}" placeholder="Pesquisar equipamento, turma, aluno ou manutenção..." autocomplete="off"><kbd>Ctrl K</kbd></form>
+        <div class="topbar-right"><button type="button" class="topbar-tool" id="topbar-alerts" aria-label="Ver pendências">${uiIcon("bell",21)}<i></i></button><button type="button" class="topbar-tool" id="topbar-theme" aria-label="Alternar tema">${uiIcon("sun",21)}</button><div class="topbar-divider"></div><div class="school-identification"><span>${uiIcon("school",23)}</span><div><strong>E.E. Amador e Catharina</strong><small>Equipa · Gestão escolar</small></div></div></div>
       </header>
       <main class="content view-${esc(state.view)}">${content}</main><footer class="equipa-watermark">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer>
     </section>
     <nav class="mobile-tabbar" aria-label="Navegação do aplicativo">
-      ${mobileNav("dashboard","Início")}${mobileNav("equipment","Equipamentos")}<button class="mobile-nav-item mobile-qr-action" id="mobile-qr-scan" type="button" aria-label="Ler QR Code"><small>Ler QR</small></button>${mobileNav("withdrawals","Retiradas")}<button class="mobile-nav-item" id="mobile-more" type="button"><small>Mais</small></button>
+      ${mobileNav("dashboard","Início")}${mobileNav("equipment","Equipamentos")}<button class="mobile-nav-item mobile-qr-action" id="mobile-qr-scan" type="button" aria-label="Ler QR Code">${uiIcon("grid",20)}<small>Ler QR</small></button>${mobileNav("withdrawals","Retiradas")}<button class="mobile-nav-item" id="mobile-more" type="button">${uiIcon("grid",20)}<small>Mais</small></button>
     </nav>
     <div class="mobile-more-backdrop" id="mobile-more-backdrop"><section class="mobile-more-sheet"><div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><div><span>Mais opções</span><strong>Equipa</strong></div><button class="icon-button" id="mobile-more-close" type="button">×</button></div><div class="mobile-more-list">${mobileMoreItems}</div><button class="mobile-sheet-logout" id="mobile-sheet-logout" type="button"><span>Sair da conta</span></button></section></div>
   </div>`;
@@ -371,7 +403,8 @@ function shell(content) {
   qs("#logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-sheet-logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-qr-scan")?.addEventListener("click", openMobileQrScanner);
-  qs("#account-chip")?.addEventListener("click", () => navigate(admin ? "admin" : "dashboard"));
+  qs("#topbar-alerts")?.addEventListener("click",()=>{state.withdrawalsStatus="overdue";navigate("withdrawals")});
+  qs("#topbar-theme")?.addEventListener("click",()=>document.documentElement.classList.toggle("equipa-dim"));
   const closeMobileMore = () => qs("#mobile-more-backdrop")?.classList.remove("open");
   qs("#mobile-more")?.addEventListener("click", () => qs("#mobile-more-backdrop")?.classList.add("open"));
   qs("#mobile-more-close")?.addEventListener("click", closeMobileMore);
@@ -384,8 +417,8 @@ function shell(content) {
     runSmartGlobalSearch(term);
   });
 }
-function nav(view, label) { return `<button type="button" class="nav-button ${state.view === view ? "active" : ""}" data-view="${view}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-label">${esc(label)}</span></button>`; }
-function mobileNav(view,label){return `<button type="button" class="mobile-nav-item ${state.view===view?"active":""}" data-view="${view}"><small>${esc(label)}</small></button>`;}
+function nav(view, label) { return `<button type="button" class="nav-button ${state.view === view ? "active" : ""}" data-view="${view}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-symbol">${uiIcon(view,20)}</span><span class="nav-label">${esc(label)}</span></button>`; }
+function mobileNav(view,label){return `<button type="button" class="mobile-nav-item ${state.view===view?"active":""}" data-view="${view}">${uiIcon(view,19)}<small>${esc(label)}</small></button>`;}
 async function navigate(view) {
   state.view = view; qs("#sidebar")?.classList.remove("open");
   if (view === "equipment") return renderEquipment();
@@ -427,30 +460,21 @@ async function renderDashboard() {
   const today = new Intl.DateTimeFormat("pt-BR", { weekday:"long", day:"2-digit", month:"long" }).format(new Date());
 
   const recentMobile = (current || []).slice(0,4);
-  shell(`<section class="future-home desktop-dashboard">
-    <header class="future-welcome"><div><span class="future-breadcrumb">Início</span><h1>Olá, ${esc(firstName())}</h1><p>${esc(roleLabel(state.profile.role))} · ${esc(today)}</p></div></header>
-
-    <section class="future-status-row" aria-label="Resumo da operação">
-      <button class="future-status-card status-blue" data-go="equipment" type="button"><span class="future-status-icon">${icon("equipment")}</span><div><strong>${Number(available).toLocaleString("pt-BR")}</strong><span>Disponíveis</span></div><small>${availablePct}% do inventário</small></button>
-      <button class="future-status-card status-navy" data-go="withdrawals" type="button"><span class="future-status-icon">${icon("withdrawals")}</span><div><strong>${Number(inUse).toLocaleString("pt-BR")}</strong><span>Em uso</span></div><small>${pendingReturns} devolução(ões) pendente(s)</small></button>
-      <button class="future-status-card status-sky" data-go="reservations" type="button"><span class="future-status-icon">${icon("reservations")}</span><div><strong>${Number(reservations).toLocaleString("pt-BR")}</strong><span>Reservas</span></div><small>Agendamentos confirmados</small></button>
-      <button class="future-status-card status-alert" data-go="${admin?"maintenance":"equipment"}" type="button"><span class="future-status-icon">${icon("maintenance")}</span><div><strong>${Number(maintenance).toLocaleString("pt-BR")}</strong><span>Manutenção</span></div><small>${maintenancePct}% exige atenção</small></button>
+  shell(`<section class="equipa-ref-home desktop-dashboard">
+    <header class="ref-welcome"><div class="ref-welcome-main"><span class="ref-breadcrumb">Início</span><div class="ref-welcome-title"><span aria-hidden="true" class="ref-wave">👋</span><div><h1>Olá, ${esc(state.profile?.full_name||firstName())}</h1><p>Aqui está o resumo da gestão de equipamentos da escola.</p></div></div></div><div class="ref-welcome-date"><strong>${esc(new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date()))}</strong><span>“Organização hoje, uma escola melhor amanhã.”</span></div></header>
+    <section class="ref-kpi-grid" aria-label="Indicadores da escola">
+      <button class="ref-kpi ref-kpi-green" data-go="equipment" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("equipment",23)}</span><span class="ref-kpi-change">↗ ${availablePct}%</span></div><strong class="ref-kpi-number">${Number(available).toLocaleString("pt-BR")}</strong><b>Disponíveis</b><small>${availablePct}% do inventário</small></button>
+      <button class="ref-kpi ref-kpi-blue" data-go="withdrawals" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("carts",23)}</span><span class="ref-kpi-change">${pendingReturns} pendente(s)</span></div><strong class="ref-kpi-number">${Number(inUse).toLocaleString("pt-BR")}</strong><b>Em uso</b><small>Equipamentos atualmente retirados</small></button>
+      <button class="ref-kpi ref-kpi-purple" data-go="reservations" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("reservations",23)}</span><span class="ref-kpi-change">Agenda</span></div><strong class="ref-kpi-number">${Number(reservations).toLocaleString("pt-BR")}</strong><b>Reservas</b><small>Agendamentos confirmados</small></button>
+      <button class="ref-kpi ref-kpi-orange" data-go="${admin?"maintenance":"equipment"}" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("maintenance",23)}</span><span class="ref-kpi-change">${maintenancePct}%</span></div><strong class="ref-kpi-number">${Number(maintenance).toLocaleString("pt-BR")}</strong><b>Manutenção</b><small>Equipamentos em manutenção</small></button>
     </section>
-
-    ${overdue?`<button class="logistics-overdue" type="button" data-overdue-alert><strong>${overdue} retirada(s) atrasada(s)</strong><span>Consultar pendências de devolução</span></button>`:""}
-    <div class="future-main-grid">
-      <section class="future-module operation-module">
-        <div class="future-module-head"><div><span class="section-overline">OPERAÇÃO</span><h2>Movimentações recentes</h2></div><button class="future-link" data-open="withdrawals">Ver todas</button></div>
-        <div class="future-list">${renderWithdrawalRows((current||[]).slice(0,5))}</div>
-      </section>
-      <section class="future-module inventory-module">
-        <div class="future-module-head"><div><span class="section-overline">INVENTÁRIO</span><h2>Situação dos equipamentos</h2></div><button class="future-link" data-open="equipment">Abrir inventário</button></div>
-        <div class="future-inventory-number"><strong>${Number(total).toLocaleString("pt-BR")}</strong><span>equipamentos ativos</span></div>
-        <div class="future-progress"><i class="p-available" style="width:${availablePct}%"></i><i class="p-use" style="width:${inUsePct}%"></i><i class="p-maint" style="width:${maintenancePct}%"></i></div>
-        <div class="future-legend"><span><i class="legend-available"></i>Disponíveis ${available}</span><span><i class="legend-use"></i>Em uso ${inUse}</span><span><i class="legend-maint"></i>Manutenção ${maintenance}</span></div>
-      </section>
+    ${overdue?`<button class="logistics-overdue" type="button" data-overdue-alert><strong>${overdue} retirada(s) atrasada(s)</strong><span>Consultar devoluções pendentes ${uiIcon("arrow",16)}</span></button>`:""}
+    <div class="ref-data-grid">
+      <section class="ref-panel ref-movements"><div class="ref-panel-title"><span class="ref-panel-icon">${uiIcon("history",21)}</span><div><h2>Movimentações recentes</h2><p>Últimas ações realizadas no sistema</p></div><button class="ref-outline-action" data-open="withdrawals" type="button">Ver todas ${uiIcon("arrow",15)}</button></div><div class="ref-movement-body">${(current||[]).length?renderWithdrawalRows((current||[]).slice(0,5)):`<div class="ref-empty-movements"><span class="ref-empty-icon">${uiIcon("inbox",48)}</span><strong>Nenhuma retirada encontrada.</strong><p>As movimentações compatíveis com seu perfil aparecem aqui.</p><button type="button" data-open="equipment" class="ref-dark-action">Registrar movimentação ${uiIcon("arrow",15)}</button></div>`}</div></section>
+      <section class="ref-panel ref-distribution"><div class="ref-panel-title"><span class="ref-panel-icon">${uiIcon("pie",21)}</span><div><h2>Situação dos equipamentos</h2><p>Visão geral do inventário</p></div><button class="ref-outline-action" data-open="equipment" type="button">Abrir inventário</button></div><div class="ref-distribution-body"><div class="ref-ring" role="img" aria-label="${availablePct}% disponíveis, ${inUsePct}% em uso, ${maintenancePct}% em manutenção" style="--ring-available:${availablePct}%;--ring-use:${availablePct+inUsePct}%;--ring-maint:${availablePct+inUsePct+maintenancePct}%"><div class="ref-ring-center"><strong>${Number(total).toLocaleString("pt-BR")}</strong><span>total</span></div></div><div class="ref-ring-legend"><div><i class="legend-green"></i><span>Disponíveis</span><b>${available}</b><small>${availablePct}%</small></div><div><i class="legend-blue"></i><span>Em uso</span><b>${inUse}</b><small>${inUsePct}%</small></div><div><i class="legend-yellow"></i><span>Reservas</span><b>${reservations}</b><small>agenda</small></div><div><i class="legend-red"></i><span>Manutenção</span><b>${maintenance}</b><small>${maintenancePct}%</small></div></div></div></section>
+      <section class="ref-panel ref-actions"><div class="ref-panel-title"><span class="ref-panel-icon">${uiIcon("lightning",21)}</span><div><h2>Ações rápidas</h2><p>Acesse as principais funções do sistema</p></div></div><div class="ref-actions-grid">${admin?`<button type="button" class="ref-action ref-action-blue" id="ref-add-equipment"><span>${uiIcon("equipment",21)}</span><strong>Adicionar equipamento</strong><small>Cadastrar novo dispositivo</small>${uiIcon("arrow",15)}</button>`:""}<button type="button" class="ref-action ref-action-green" data-open="equipment"><span>${uiIcon("withdrawals",21)}</span><strong>Registrar retirada</strong><small>Iniciar uma nova retirada</small>${uiIcon("arrow",15)}</button><button type="button" class="ref-action ref-action-purple" data-open="reservations"><span>${uiIcon("reservations",21)}</span><strong>Criar reserva</strong><small>Agendar equipamento</small>${uiIcon("arrow",15)}</button>${admin?`<button type="button" class="ref-action ref-action-orange" data-open="maintenance"><span>${uiIcon("maintenance",21)}</span><strong>Abrir manutenção</strong><small>Registrar manutenção</small>${uiIcon("arrow",15)}</button>`:""}</div></section>
+      <section class="ref-panel ref-alerts"><div class="ref-panel-title"><span class="ref-panel-icon icon-alert">${uiIcon("bell",21)}</span><div><h2>Alertas e lembretes</h2><p>Fique atento às pendências</p></div></div><div class="ref-alerts-body">${overdue?`<button class="ref-alert-action" type="button" data-overdue-alert>${uiIcon("warning",27)}<strong>${overdue} retirada(s) atrasada(s)</strong><span>Consulte as devoluções pendentes</span></button>`:`<div class="ref-no-alert">${uiIcon("bell",28)}<strong>Nenhum alerta no momento.</strong><span>Tudo certo por aqui!</span></div>`}</div></section>
     </div>
-
   </section>
 
   <section class="mobile-dashboard-organic" aria-label="Visão geral mobile">
@@ -483,6 +507,7 @@ async function renderDashboard() {
   </section>`);
 
   qsa("[data-go],[data-open]").forEach(b => b.addEventListener("click", () => navigate(b.dataset.go || b.dataset.open)));
+  qs("#ref-add-equipment")?.addEventListener("click",()=>window.EquipaInventory?.openHub("individual"));
 }
 function closeContextMenu(){qs("#equipa-context-menu")?.remove()}
 function openContextMenu(x,y,items=[]){
@@ -526,10 +551,11 @@ function contextActionIcon(name){
 }
 function bindEquipmentContextMenus(){ /* contexto tratado por delegação global */ }
 function equipmentRows(rows) {
-  if (!rows.length) return `<div class="empty"><strong>Nenhum equipamento.</strong><span>Os registros aparecerão aqui.</span></div>`;
-  return `<div class="data-list">${rows.map(e => `<button class="data-row equipment-row" data-equipment="${esc(e.id)}" type="button"><div class="data-main"><strong>${esc(e.label || e.code)}</strong><span>${esc(schoolGroupLabel(e.school_group))} · ${esc(e.brand)} ${esc(e.model)} · ${esc(e.asset_tag || e.code)}${e.location_text?` · ${esc(e.location_text)}`:""}</span></div><span class="status status-${esc(e.status)}">${esc(statusLabel(e.status))}</span><span class="data-date">${esc(dt(e.updated_at))}</span></button>`).join("")}</div>`;
+  if(!rows.length)return `<div class="empty ref-inventory-empty">${uiIcon("inbox",34)}<strong>Nenhum equipamento encontrado.</strong><span>Altere os filtros para consultar o inventário.</span></div>`;
+  return `<div class="ref-inventory-table-wrap"><table class="ref-inventory-table"><thead><tr><th><input type="checkbox" id="equip-select-all" aria-label="Selecionar equipamentos desta página"></th><th>CÓDIGO</th><th>PATRIMÔNIO</th><th>MODELO</th><th>LOCALIZAÇÃO</th><th>SITUAÇÃO</th><th>ÚLTIMA ATIVIDADE</th><th>AÇÕES</th></tr></thead><tbody>${rows.map(e=>`<tr class="equipment-row" data-equipment="${esc(e.id)}" tabindex="0"><td><input type="checkbox" class="equip-row-select" value="${esc(e.id)}" aria-label="Selecionar ${esc(e.code)}"></td><td><div class="ref-equipment-cell"><span class="ref-equipment-icon">${uiIcon("equipment",19)}</span><div><strong>${esc(e.code)}</strong><small>${esc(e.label||schoolGroupLabel(e.school_group))}</small></div></div></td><td>${e.asset_tag?`<span class="ref-patrimony">${esc(e.asset_tag)}</span>`:`<span class="ref-patrimony ref-none">Não definido</span>`}</td><td>${esc(e.model||"Não informado")}</td><td><span class="ref-location">${uiIcon("tag",14)}${esc(e.location_text||"Não informada")}</span></td><td><span class="ref-state ref-state-${esc(e.status)}"><i></i>${esc(statusLabel(e.status))}</span></td><td>${esc(dt(e.updated_at))}</td><td><button type="button" class="ref-row-more" data-item-menu="${esc(e.id)}" aria-label="Ações de ${esc(e.code)}">···</button></td></tr>`).join("")}</tbody></table></div>`;
 }
-function bindEquipmentRowClicks(root = document) { qsa("[data-equipment]", root).forEach(r => r.addEventListener("click", () => openEquipment(r.dataset.equipment))); bindEquipmentContextMenus(root); }
+
+function bindEquipmentRowClicks(root = document) { qsa("[data-equipment]", root).forEach(r => {r.addEventListener("click",e=>{if(e.target.closest("input,[data-item-menu]"))return;openEquipment(r.dataset.equipment)});r.addEventListener("keydown",e=>{if(e.target===r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openEquipment(r.dataset.equipment)}})}); bindEquipmentContextMenus(root); }
 document.addEventListener("click",e=>{if(e.target.closest?.("[data-overdue-alert]")){state.withdrawalsStatus="overdue";navigate("withdrawals");}});
 function installGlobalContextMenus(){
   if(document.documentElement.dataset.contextReady)return;
@@ -656,7 +682,9 @@ async function renderEquipment() {
   const from = state.equipmentPage * config.pageSize;
   const to = from + config.pageSize - 1;
   const filterCount = activeFilterCount([state.equipmentFilters.status, state.equipmentFilters.active==="active" ? "" : state.equipmentFilters.active, state.equipmentFilters.group]);
-  shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Inventário</span><h2>Equipamentos</h2><p>Consulte, filtre e gerencie os dispositivos cadastrados.</p></div><div class="toolbar-actions">${admin ? `<button class="button ghost" id="inventory-labels">Etiquetas PDF</button><button class="button ghost" id="import-equipment">Importar</button><button class="button primary" id="new-equipment">Cadastrar equipamento</button>` : ""}</div></div><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input class="search" id="equipment-search" type="search" value="${esc(state.equipmentSearch)}" placeholder="Buscar código, patrimônio, modelo, localização ou situação"><button class="filter-button ${filterCount ? 'has-active active' : ''}" id="equipment-filter-toggle" type="button" aria-expanded="${filterCount ? 'true' : 'false'}">${icon("filter")}<span>Filtros</span>${filterBadge(filterCount)}</button></div></div><div class="filter-drawer" id="equipment-filter-panel"><div class="filter-grid"><label>Estado<select id="equipment-status"><option value="">Todos os estados</option><option value="available" ${state.equipmentFilters.status==='available'?'selected':''}>Disponível</option><option value="in_use" ${state.equipmentFilters.status==='in_use'?'selected':''}>Em uso</option><option value="maintenance" ${state.equipmentFilters.status==='maintenance'?'selected':''}>Manutenção</option><option value="unavailable" ${state.equipmentFilters.status==='unavailable'?'selected':''}>Indisponível</option></select></label><label>Catálogo<select id="equipment-active"><option value="">Todos</option><option value="active" ${state.equipmentFilters.active==='active'?'selected':''}>Apenas ativos</option><option value="inactive" ${state.equipmentFilters.active==='inactive'?'selected':''}>Inativos</option></select></label><label>Grupo<select id="equipment-group"><option value="">Todos os grupos</option>${schoolGroupOptions(state.equipmentFilters.group)}</select></label></div><div class="filter-actions"><button class="button small ghost" id="equipment-filter-clear" type="button">Limpar filtros</button><button class="button primary small" id="equipment-filter-apply" type="button">Aplicar</button></div></div><div id="equipment-results"><div class="loading">Carregando equipamentos…</div></div></section>`);
+  shell(`<section class="ref-equipment-page"><div class="ref-page-heading"><div class="ref-page-title"><span class="ref-page-symbol">${uiIcon("equipment",28)}</span><div><span class="ref-overline">INVENTÁRIO</span><h1>Equipamentos</h1><p>Consulte, filtre e gerencie os dispositivos cadastrados na escola.</p></div></div><div class="ref-heading-actions">${admin?`<button class="ref-outline-action" id="inventory-labels">${uiIcon("tag",18)} Etiquetas PDF</button><button class="ref-outline-action" id="import-equipment">${uiIcon("upload",18)} Importar</button><button class="ref-primary-action" id="new-equipment">${uiIcon("plus",19)} Cadastrar equipamento</button>`:""}</div></div>
+  <div class="ref-search-panel"><div class="ref-search-line"><label class="ref-search-control">${uiIcon("search",20)}<input class="search" id="equipment-search" type="search" value="${esc(state.equipmentSearch)}" placeholder="Buscar por código, patrimônio, modelo, localização ou situação..."></label><button type="button" class="ref-outline-action" id="equipment-reset">${uiIcon("rotate",17)} Limpar filtros</button><button class="ref-filter-action" id="equipment-filter-toggle" type="button" aria-expanded="true">${uiIcon("filter",17)} Filtros ${filterBadge(filterCount)}</button></div><div class="filter-drawer ref-equipment-filters" id="equipment-filter-panel"><div class="filter-grid"><label>Situação<select id="equipment-status"><option value="">Todas</option><option value="available" ${state.equipmentFilters.status==='available'?'selected':''}>Disponível</option><option value="in_use" ${state.equipmentFilters.status==='in_use'?'selected':''}>Em uso</option><option value="maintenance" ${state.equipmentFilters.status==='maintenance'?'selected':''}>Manutenção</option><option value="unavailable" ${state.equipmentFilters.status==='unavailable'?'selected':''}>Indisponível</option></select></label><label>Tipo<select id="equipment-group"><option value="">Todos</option>${schoolGroupOptions(state.equipmentFilters.group)}</select></label><label>Localização<input id="equipment-location" value="${esc(state.equipmentFilters.location||"")}" placeholder="Todas as localizações"></label><label>Modelo<input id="equipment-model-filter" value="${esc(state.equipmentFilters.model||"")}" placeholder="Todos os modelos"></label><label class="ref-hidden-active">Catálogo<select id="equipment-active"><option value="active" ${state.equipmentFilters.active==='active'?'selected':''}>Ativos</option><option value="">Todos</option><option value="inactive" ${state.equipmentFilters.active==='inactive'?'selected':''}>Inativos</option></select></label></div><div class="filter-actions"><button type="button" class="button small ghost" id="equipment-filter-clear">Limpar</button><button type="button" class="button small primary" id="equipment-filter-apply">Aplicar filtros</button></div></div></div>
+  <section class="ref-results-panel"><header class="ref-results-heading"><strong id="equipment-count">Consultando equipamentos...</strong><div class="ref-display-controls"><button id="equipment-label-selected" type="button" class="ref-outline-action" hidden>PDF dos selecionados</button><button type="button" class="ref-display-button active" id="equip-list-view" aria-label="Visualização em lista">${uiIcon("list",19)}</button><button type="button" class="ref-display-button" id="equip-grid-view" aria-label="Visualização em grade">${uiIcon("grid",19)}</button><select id="equipment-sort" aria-label="Ordenar equipamentos"><option value="code">Código</option><option value="recent">Mais recentes</option></select></div></header><div id="equipment-results"><div class="loading">Carregando equipamentos…</div></div></section></section>`);
   const host = qs("#equipment-results");
   const search = cleanSearch(state.equipmentSearch);
   const fields="id,code,asset_tag,brand,model,label,school_group,serial_number,location_text,notes,status,is_active,created_at,updated_at,qr_token";
@@ -665,6 +693,8 @@ async function renderEquipment() {
   if(state.equipmentFilters.active==="inactive")query=query.eq("is_active",false);
   if(state.equipmentFilters.status)query=query.eq("status",state.equipmentFilters.status);
   if(state.equipmentFilters.group)query=query.eq("school_group",state.equipmentFilters.group);
+  if(state.equipmentFilters.location)query=query.ilike("location_text",`*${state.equipmentFilters.location.replace(/[%*,()]/g," ").trim()}*`);
+  if(state.equipmentFilters.model)query=query.ilike("model",`*${state.equipmentFilters.model.replace(/[%*,()]/g," ").trim()}*`);
   if(search){
     const q=search.replace(/[.,()'":;%*\\]/g," ").trim();
     if(q){
@@ -672,20 +702,37 @@ async function renderEquipment() {
       query=query.or(columns.map(column=>`${column}.ilike.*${q}*`).join(","));
     }
   }
-  const result=await query.order("code").range(from,to);
+  const result=await (state.equipmentSort==="recent"?query.order("updated_at",{ascending:false}):query.order("code")).range(from,to);
   const rows=result.data||[];
   const count=result.count||0;
   const error=result.error;
+  qs("#equipment-count").textContent = `${count} equipamento${count===1?" encontrado":"s encontrados"}`;
   if (error) host.innerHTML = `<div class="empty"><strong>Não foi possível carregar.</strong><span>${esc(errText(error))}</span></div>`;
-  else host.innerHTML = `${equipmentRows(rows || [])}<div class="pagination"><span>${count || 0} registro(s)</span><div><button class="button small" id="prev" ${state.equipmentPage===0?"disabled":""}>Anterior</button><button class="button small" id="next" ${to+1>=(count||0)?"disabled":""}>Próxima</button></div></div>`;
+  else host.innerHTML = `${equipmentRows(rows || [])}<div class="pagination"><span>Exibindo ${count===0?0:from+1} a ${Math.min(count,to+1)} de ${count} equipamento${count===1?"":"s"}</span><div><button class="button small" id="prev" ${state.equipmentPage===0?"disabled":""}>‹</button><span class="ref-pagination-current">${state.equipmentPage+1}</span><button class="button small" id="next" ${to+1>=(count||0)?"disabled":""}>›</button></div></div>`;
   bindEquipmentRowClicks(host);
   qs("#prev")?.addEventListener("click",()=>{state.equipmentPage--;renderEquipment()});
   qs("#next")?.addEventListener("click",()=>{state.equipmentPage++;renderEquipment()});
   let timer;
   qs("#equipment-search")?.addEventListener("input", e => { clearTimeout(timer); timer=setTimeout(()=>{state.equipmentSearch=e.target.value;state.equipmentPage=0;renderEquipment()},180); });
+  if(matchMedia("(min-width:821px)").matches) qs("#equipment-filter-panel")?.classList.add("open");
   wireFilterToggle("equipment-filter-toggle", "equipment-filter-panel");
-  qs("#equipment-filter-apply")?.addEventListener("click", () => { state.equipmentFilters.status = qs("#equipment-status")?.value || ""; state.equipmentFilters.active = qs("#equipment-active")?.value || ""; state.equipmentFilters.group = qs("#equipment-group")?.value || ""; state.equipmentPage = 0; renderEquipment(); });
-  qs("#equipment-filter-clear")?.addEventListener("click", () => { state.equipmentFilters = { status: "", active: "active", group: "" }; state.equipmentPage = 0; renderEquipment(); });
+  const applyRefFilters=()=>{state.equipmentFilters.status=qs("#equipment-status")?.value||"";state.equipmentFilters.active=qs("#equipment-active")?.value||"";state.equipmentFilters.group=qs("#equipment-group")?.value||"";state.equipmentFilters.location=qs("#equipment-location")?.value.trim()||"";state.equipmentFilters.model=qs("#equipment-model-filter")?.value.trim()||"";state.equipmentPage=0;renderEquipment()};
+  qs("#equipment-filter-apply")?.addEventListener("click",applyRefFilters);
+  ["#equipment-status","#equipment-group","#equipment-active","#equipment-location","#equipment-model-filter"].forEach(sel=>qs(sel)?.addEventListener("change",()=>{if(matchMedia("(min-width:821px)").matches)applyRefFilters()}));
+  ["#equipment-location","#equipment-model-filter"].forEach(sel=>qs(sel)?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();applyRefFilters()}}));
+  const clearRefFilters=()=>{state.equipmentFilters={status:"",active:"active",group:"",location:"",model:""};state.equipmentSearch="";state.equipmentPage=0;renderEquipment()};
+  qs("#equipment-filter-clear")?.addEventListener("click",clearRefFilters);
+  qs("#equipment-reset")?.addEventListener("click",clearRefFilters);
+  qs("#equipment-sort").value=state.equipmentSort||"code";
+  qs("#equipment-sort")?.addEventListener("change",e=>{state.equipmentSort=e.target.value;state.equipmentPage=0;renderEquipment()});
+  qs("#equip-grid-view")?.addEventListener("click",()=>{qs(".ref-inventory-table-wrap")?.classList.add("ref-compact-grid");qs("#equip-grid-view")?.classList.add("active");qs("#equip-list-view")?.classList.remove("active")});
+  qs("#equip-list-view")?.addEventListener("click",()=>{qs(".ref-inventory-table-wrap")?.classList.remove("ref-compact-grid");qs("#equip-list-view")?.classList.add("active");qs("#equip-grid-view")?.classList.remove("active")});
+  qs("#equip-select-all")?.addEventListener("change",e=>qsa(".equip-row-select",host).forEach(cb=>cb.checked=e.target.checked));
+  const updateSelectedLabels=()=>{const selected=qsa(".equip-row-select:checked",host);const btn=qs("#equipment-label-selected");if(btn){btn.hidden=!selected.length;btn.textContent=`PDF dos selecionados (${selected.length})`}};
+  qsa(".equip-row-select",host).forEach(cb=>{cb.addEventListener("click",e=>e.stopPropagation());cb.addEventListener("change",updateSelectedLabels)});
+  qs("#equip-select-all")?.addEventListener("change",updateSelectedLabels);
+  qs("#equipment-label-selected")?.addEventListener("click",()=>{const ids=new Set(qsa(".equip-row-select:checked",host).map(cb=>cb.value));const chosen=rows.filter(row=>ids.has(row.id));if(chosen.length)window.EquipaInventory?.downloadLabels(chosen,"Equipa-etiquetas-selecionadas")});
+  qsa("[data-item-menu]",host).forEach(btn=>btn.addEventListener("click",e=>{e.stopPropagation();const row=btn.closest("[data-equipment]");row?.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:btn.getBoundingClientRect().right-8,clientY:btn.getBoundingClientRect().bottom+2}))}));
   qs("#new-equipment")?.addEventListener("click",()=>window.EquipaInventory.openHub("individual"));
   qs("#inventory-labels")?.addEventListener("click",()=>window.EquipaInventory.chooseLabels());
   qs("#import-equipment")?.addEventListener("click",()=>window.EquipaInventory.openHub("import"));
