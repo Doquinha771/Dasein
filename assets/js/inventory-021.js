@@ -209,8 +209,14 @@
     ctx.mode=mode;ctx.rows=[];ctx.existing=new Set();ctx.actionId=null;
     modal.querySelectorAll('[data-intake-mode]').forEach(x=>x.classList.toggle('active',x.dataset.intakeMode===mode));
     const host=$('#eq-intake-workspace',modal);
+    const intros={
+      individual:{title:'Cadastro individual',desc:'Preencha as informações do equipamento. Campos marcados com * são obrigatórios.'},
+      batch:{title:'Cadastro em lote',desc:'Cadastre um laboratório inteiro em poucos minutos com geração sequencial dos números.'},
+      import:{title:'Importar arquivo',desc:'Envie CSV, XLSX ou DOCX com tabela. O arquivo é validado antes da confirmação.'}
+    };
+    const header=`<div class="ref-mode-banner"><span class="report-mini-icon">${uiIcon(mode==='import'?'download':mode==='batch'?'stack':'equipment',20)}</span><div><strong>${intros[mode].title}</strong><p>${intros[mode].desc}</p></div></div>`;
     if(mode==='import') {
-      host.innerHTML=`<div class="eq-import-start"><p>CSV, XLSX ou DOCX com tabelas. O arquivo é processado no navegador e descartado após a prévia. Até ${MAX} linhas por confirmação.</p><label>Arquivo de inventário<input id="eq-intake-file" type="file" accept=".csv,.xlsx,.docx"></label><p class="muted">Cabeçalhos esperados: Número/Código, Modelo, Marca, Localização, Patrimônio e outros campos opcionais. A importação não cria cadastros parciais.</p></div>`;
+      host.innerHTML=header+`<div class="eq-import-start"><p>CSV, XLSX ou DOCX com tabelas. O arquivo é processado no navegador e descartado após a prévia. Até ${MAX} linhas por confirmação.</p><label>Arquivo de inventário<input id="eq-intake-file" type="file" accept=".csv,.xlsx,.docx"></label><p class="muted">Cabeçalhos esperados: Número/Código, Modelo, Marca, Localização, Patrimônio e outros campos opcionais. A importação não cria cadastros parciais.</p></div>`;
       $('#eq-intake-file',host).addEventListener('change',async e=>{
         const input=e.currentTarget; input.disabled=true;
         try {ctx.rows=await importFile(input.files?.[0]);previewTable(modal,ctx);}
@@ -218,7 +224,7 @@
       });
       return;
     }
-    host.innerHTML=editableFields(ctx.models,mode);
+    host.innerHTML=header+editableFields(ctx.models,mode);
     const form=$('#eq-intake-form',host);
     modelSelection(form,ctx.models);
     if(mode==='batch') {
@@ -235,7 +241,7 @@
   }
   async function openHub(initial='individual') {
     if(state.profile?.role!=='admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
-    const modal=makeModal(`<div class="panel-head"><div><span class="eyebrow">Inventário · Alpha</span><h2>Cadastrar equipamentos</h2></div><button class="icon-button" data-close type="button" aria-label="Fechar">×</button></div><div class="modal-body eq-intake-body"><div class="eq-intake-tabs" role="tablist"><button class="button" type="button" data-intake-mode="individual">Individual</button><button class="button" type="button" data-intake-mode="batch">Em lote</button><button class="button" type="button" data-intake-mode="import">Importar arquivo</button><button class="button ghost" type="button" id="eq-manage-models">Modelos técnicos</button></div><div id="eq-intake-workspace"><p class="muted">Carregando modelos…</p></div></div>`,true);
+    const modal=makeModal(`<div class="ref-modal-shell ref-register-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item" type="button" data-intake-mode="individual"><span>${uiIcon('equipment',18)}</span><div><strong>Individual</strong><small>Cadastrar um único equipamento</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="batch"><span>${uiIcon('grid',18)}</span><div><strong>Em lote</strong><small>Cadastrar vários equipamentos</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="import"><span>${uiIcon('upload',18)}</span><div><strong>Importar arquivo</strong><small>Excel, CSV ou planilha</small></div></button><button class="ref-modal-nav-item ghost-alt" type="button" id="eq-manage-models"><span>${uiIcon('admin',18)}</span><div><strong>Modelos técnicos</strong><small>Usar modelos pré-cadastrados</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Preencha apenas as informações que souber. Os campos opcionais podem ser completados depois.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div id="eq-intake-workspace" class="ref-register-workspace"><p class="muted">Carregando modelos…</p></div></div></div>`,true);
     const ctx={models:[],mode:initial,rows:[],actionId:null};
     try{ctx.models=await loadModels();}catch(error){notify(registerError(error),'error');modal.remove();return;}
     modal.querySelectorAll('[data-intake-mode]').forEach(b=>b.addEventListener('click',()=>renderMode(modal,ctx,b.dataset.intakeMode)));

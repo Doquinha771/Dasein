@@ -805,80 +805,43 @@ function buildBookingOccurrences(startValue, endValue, repeatCount) {
   return dates;
 }
 function openQuantityReservation({ group = "", location = "" } = {}) {
-  const first = new Date(Date.now() + 60 * 60 * 1000);
-  first.setMinutes(0, 0, 0);
-  const last = new Date(first.getTime() + 100 * 60 * 1000);
-  const modal = makeModal(`<div class="panel-head"><div><span class="eyebrow">Agendamento de equipamentos</span><h2>Reservar por quantidade</h2></div><button class="icon-button" type="button" data-close>×</button></div>
-  <div class="modal-body"><form class="form-grid" id="quantity-form">
-  <label>Quando começa?<input type="datetime-local" name="start" required value="${localDateTimeValue(first)}"></label>
-  <label>Quando termina?<input type="datetime-local" name="end" required value="${localDateTimeValue(last)}"></label>
-  <label>Quantos equipamentos?<input name="quantity" type="number" required min="1" max="60" value="1"></label>
-  <label>Tipo de equipamento<select name="group"><option value="">Qualquer tipo disponível</option>${schoolGroupOptions(group)}</select></label>
-  <label>Sala / destino<input name="destination" required maxlength="160" placeholder="Ex.: Sala 12"></label>
-  <label>Turma<input name="class_name" required maxlength="120" placeholder="Ex.: 3º A"></label>
-  <label>Localização de origem (opcional)<input name="location" maxlength="160" value="${esc(location)}" placeholder="Ex.: Sala de equipamentos"></label>
-  <label>Recorrência<select name="repeat"><option value="1">Uma única vez</option><option value="2">Toda semana · 2 semanas</option><option value="4">Toda semana · 4 semanas</option><option value="8">Toda semana · 8 semanas</option><option value="12">Toda semana · 12 semanas</option></select></label>
-  <label class="span-2">Observações opcionais<textarea name="notes" maxlength="800"></textarea></label>
-  <div class="span-2 booking-explain">1. Informe período, sala e quantidade. 2. Confira a disponibilidade por dia. 3. Confirme. A seleção definitiva acontece no banco.</div>
-  <div id="quantity-preview" class="span-2" aria-live="polite"></div>
-  <div class="modal-actions span-2"><button class="button" type="button" data-close>Cancelar</button><button class="button" id="booking-preview" type="submit">Ver disponibilidade</button><button class="button primary" id="booking-confirm" type="button" disabled>Confirmar reserva</button></div>
-  </form></div>`, true);
-  const form = qs("#quantity-form", modal);
-  const preview = qs("#quantity-preview", modal);
-  const confirm = qs("#booking-confirm", modal);
-  let prepared = null;
-  const clientActionId = uid();
-  form.addEventListener("input", () => { prepared = null; confirm.disabled = true; preview.textContent = ""; });
-  form.addEventListener("change", () => { prepared = null; confirm.disabled = true; preview.textContent = ""; });
-  form.addEventListener("submit", async ev => {
+  const now = new Date();
+  const start = localDateTimeValue(new Date(now.getTime() + 60 * 60000));
+  const end = localDateTimeValue(new Date(now.getTime() + 2 * 60 * 60000));
+  const modal = makeModal(`<div class="ref-modal-shell ref-booking-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Reserva</span><h2>Reservar por quantidade</h2><p>Solicite vários equipamentos para a mesma aula, laboratório ou evento.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item active" type="button"><span>${uiIcon("reservations",18)}</span><div><strong>Informações</strong><small>Quantidade e período</small></div></button><button class="ref-modal-nav-item" type="button" disabled><span>${uiIcon("filter",18)}</span><div><strong>Filtros</strong><small>Grupo e localização</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Se a escola usa carrinhos ou laboratórios, informe o grupo e a localização para facilitar a separação.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Agendamento de equipamentos</span><h2>Nova reserva em lote</h2><p>Defina a quantidade necessária e o sistema encontra itens compatíveis.</p></div><button class="button ghost" type="button" data-close>Fechar</button></div><div class="ref-modal-banner"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><strong>Reserva por quantidade</strong><p>Ideal para turmas inteiras e uso compartilhado.</p></div></div><div class="modal-body ref-modal-body"><form id="quantity-reservation-form" class="form-grid ref-form-grid"><div class="ref-section-title span-2">Dados da reserva</div><label>Início *<input type="datetime-local" name="start" required value="${start}"></label><label>Fim *<input type="datetime-local" name="end" required value="${end}"></label><label>Turma *<input name="class_name" required maxlength="120" placeholder="Ex.: 3º A"></label><label>Destino *<input name="destination" required maxlength="160" placeholder="Ex.: Sala 08"></label><label>Quantidade *<input type="number" name="quantity" min="1" max="60" value="1" required></label><label>Grupo<select name="group"><option value="">Todos</option>${schoolGroupOptions(group)}</select></label><label>Localização<input name="location" maxlength="160" value="${esc(location)}" placeholder="Opcional"></label><label class="span-2">Observação<textarea name="notes" maxlength="800" placeholder="Observações opcionais para o atendimento da reserva"></textarea></label><div class="modal-actions span-2 ref-form-actions"><button class="button ghost" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar reserva</button></div></form></div></div></div>`, true);
+  qs("#quantity-reservation-form", modal)?.addEventListener("submit", async ev => {
     ev.preventDefault();
-    const f = new FormData(form);
-    const quantity = Number(f.get("quantity"));
-    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 60) return notify("Informe de 1 a 60 equipamentos.", "warning");
-    let occurrences;
-    try { occurrences = buildBookingOccurrences(String(f.get("start")), String(f.get("end")), Number(f.get("repeat"))); }
-    catch (error) { return notify(error.message, "warning"); }
-    const payload = { p_quantity: quantity, p_school_group: String(f.get("group") || ""),
-      p_location: String(f.get("location") || "").trim(), p_class_name: String(f.get("class_name") || "").trim(),
-      p_destination: String(f.get("destination") || "").trim(), p_occurrences: occurrences,
-      p_notes: String(f.get("notes") || "").trim() || null, p_client_action_id: clientActionId };
-    if (!payload.p_class_name || !payload.p_destination) return notify("Informe turma e destino.", "warning");
-    const button = qs("#booking-preview", modal);
-    setBusy(button, true, "Consultando…");
-    const { data, error } = await supabase.rpc("equipa_preview_quantity", {
-      p_school_group: payload.p_school_group, p_location: payload.p_location, p_occurrences: occurrences
+    const button = qs('button[type="submit"]', ev.currentTarget);
+    setBusy(button, true, "Reservando…");
+    const f = new FormData(ev.currentTarget);
+    const { error } = await supabase.rpc("create_quantity_reservation", {
+      p_group: f.get("group") || null,
+      p_location_text: f.get("location").trim() || null,
+      p_quantity: Number(f.get("quantity")),
+      p_class_name: f.get("class_name").trim(),
+      p_destination: f.get("destination").trim(),
+      p_start_at: new Date(f.get("start")).toISOString(),
+      p_end_at: new Date(f.get("end")).toISOString(),
+      p_notes: f.get("notes").trim() || null,
+      p_client_action_id: uid()
     });
     setBusy(button, false);
     if (error) return notify(errText(error), "error");
-    const results = Array.isArray(data) ? data : [];
-    const eligible = results.length === occurrences.length && results.every(x => Number(x.available) >= quantity);
-    preview.innerHTML = `<div class="booking-preview"><strong>${eligible ? "Disponibilidade preliminar confirmada" : "Ajuste sua solicitação"}</strong>
-      ${results.map(x => `<div class="booking-preview-row"><span>${esc(dt(x.start_at))}</span><span class="${Number(x.available)<quantity ? 'booking-shortage' : ''}">${Number(x.available)} disponíveis / ${quantity} solicitados</span></div>`).join("")}
-      <small>A disponibilidade é verificada novamente no momento da confirmação. Nenhuma reserva parcial é criada automaticamente.</small></div>`;
-    prepared = eligible ? payload : null;
-    confirm.disabled = !eligible;
-  });
-  confirm.addEventListener("click", async () => {
-    if (!prepared) return;
-    setBusy(confirm, true, "Confirmando…");
-    const { data, error } = await supabase.rpc("equipa_reserve_quantity", prepared);
-    setBusy(confirm, false);
-    if (error) return notify(errText(error), "error");
-    if (!data?.ok) {
-      prepared = null; confirm.disabled = true;
-      const date = data?.start_at ? ` em ${dt(data.start_at)}` : "";
-      return notify(`Você solicitou ${data?.requested ?? "?"} equipamentos, mas apenas ${data?.available ?? "?"} estavam disponíveis${date}. Nenhuma reserva foi criada.`, "warning");
-    }
-    notify(`${data.quantity} equipamento(s) reservado(s) em ${data.occurrences} ocorrência(s).`, "success");
-    modal.remove(); state.bookingPage = 0; navigate("reservations");
+    notify("Reserva criada.", "success");
+    modal.remove();
+    navigate("reservations");
   });
 }
 
+
 function openReservationModal(e) {
-  const now=new Date();now.setMinutes(now.getMinutes()-now.getTimezoneOffset()+30);const start=now.toISOString().slice(0,16);const endD=new Date(now.getTime()+60*60*1000);const end=endD.toISOString().slice(0,16);
-  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Reserva futura</span><h2>${esc(e.label||e.code)}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="reservation-form" class="form-grid"><label>Início<input type="datetime-local" name="start" required value="${start}"></label><label>Fim<input type="datetime-local" name="end" required value="${end}"></label><label>Turma<input name="class_name" required maxlength="120"></label><label>Destino<input name="destination" required maxlength="160"></label><label class="span-2">Observação<textarea name="notes" maxlength="800"></textarea></label><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Reservar</button></div></form></div>`,true);
+  const now=new Date();
+  const start=localDateTimeValue(new Date(now.getTime()+60*60000));
+  const end=localDateTimeValue(new Date(now.getTime()+2*60*60000));
+  const m=makeModal(`<div class="ref-modal-shell ref-booking-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Reserva</span><h2>Nova reserva</h2><p>Agende um equipamento com o mesmo padrão visual do inventário.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item active" type="button"><span>${uiIcon("reservations",18)}</span><div><strong>Detalhes</strong><small>Período e destino</small></div></button><button class="ref-modal-nav-item" type="button" disabled><span>${uiIcon("equipment",18)}</span><div><strong>Equipamento</strong><small>${esc(e.code)}</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Use horários realistas para facilitar check-in e retirada.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Agenda escolar</span><h2>${esc(e.label||e.code)}</h2><p>${esc(e.brand||'')} ${esc(e.model||'')} · ${esc(e.location_text||'Local não informado')}</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div class="ref-modal-banner"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><strong>Reserva individual</strong><p>Campos com * são obrigatórios.</p></div></div><div class="modal-body ref-modal-body"><form id="reservation-form" class="form-grid ref-form-grid"><div class="ref-section-title span-2">Informações da reserva</div><label>Início *<input type="datetime-local" name="start" required value="${start}"></label><label>Fim *<input type="datetime-local" name="end" required value="${end}"></label><label>Turma *<input name="class_name" required maxlength="120" placeholder="Ex.: 3º A"></label><label>Destino *<input name="destination" required maxlength="160" placeholder="Ex.: Sala 12"></label><label class="span-2">Observação<textarea name="notes" maxlength="800" placeholder="Observações opcionais para a reserva"></textarea></label><div class="modal-actions span-2 ref-form-actions"><button class="button ghost" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar reserva</button></div></form></div></div></div>`,true);
   qs("#reservation-form",m).addEventListener("submit",async ev=>{ev.preventDefault();const b=qs('button[type="submit"]',ev.currentTarget);setBusy(b,true,"Reservando…");const f=new FormData(ev.currentTarget);const {error}=await supabase.rpc("create_reservation",{p_equipment_id:e.id,p_class_name:f.get("class_name").trim(),p_destination:f.get("destination").trim(),p_start_at:new Date(f.get("start")).toISOString(),p_end_at:new Date(f.get("end")).toISOString(),p_notes:f.get("notes").trim()||null,p_client_action_id:uid()});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Reserva criada.","success");m.remove();navigate("reservations")});
 }
+
 function openMaintenanceModal(e) {
   const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Manutenção</span><h2>${esc(e.label||e.code)}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="maintenance-form" class="auth-form"><label>Motivo<input name="title" required maxlength="160" placeholder="Ex.: teclado com falha"></label><label>Observações<textarea name="notes" maxlength="1200"></textarea></label><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Abrir manutenção</button></div></form></div>`);
   qs("#maintenance-form",m).addEventListener("submit",async ev=>{ev.preventDefault();const b=qs('button[type="submit"]',ev.currentTarget);setBusy(b,true,"Abrindo…");const f=new FormData(ev.currentTarget);const {error}=await supabase.rpc("open_maintenance",{p_equipment_id:e.id,p_title:f.get("title").trim(),p_notes:f.get("notes").trim()||null,p_client_action_id:uid()});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Equipamento enviado para manutenção.","success");m.remove();navigate("maintenance")});
@@ -1060,42 +1023,243 @@ async function openCart(token) {
 }
 async function openCartForm(item=null){
   let record=item;
-  if(item?.qr_token && (!item.equipment_codes || !item.equipment_codes.length)){const {data}=await supabase.rpc("cart_scan_equipment_list_v2",{p_qr_token:item.qr_token});record={...item,equipment_codes:(data||[]).map(x=>x.code)}}
-  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Administração</span><h2>${record?"Editar":"Novo"} carrinho</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="cart-form" class="form-grid"><label>Número<input name="number" type="number" min="1" required value="${esc(record?.number||"")}"></label><label>Nome<input name="name" maxlength="120" value="${esc(record?.name||"")}" placeholder="Ex.: Carrinho 1"></label><label>Localização<input name="location_text" maxlength="160" value="${esc(record?.location_text||"")}" placeholder="Ex.: Sala maker"></label><label>Capacidade<input name="capacity" type="number" min="1" max="200" value="${esc(record?.capacity||"")}" placeholder="Ex.: 36"></label><label class="span-2">Códigos dos equipamentos<textarea name="codes" required placeholder="CB-001
-CB-002
-CB-003">${esc((record?.equipment_codes||[]).join("\n"))}</textarea></label><label class="span-2">Observações<textarea name="notes" maxlength="1200" placeholder="Informações operacionais do carrinho">${esc(record?.notes||"")}</textarea></label><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar carrinho</button></div></form></div>`,true);
-  qs("#cart-form",m).addEventListener("submit",async e=>{e.preventDefault();const b=qs('button[type="submit"]',e.currentTarget);setBusy(b,true,"Salvando…");const f=new FormData(e.currentTarget);const codes=[...new Set(String(f.get("codes")||"").split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean))];const {error}=await supabase.rpc("save_equipment_cart_v2",{p_cart_id:record?.id?Number(record.id):null,p_number:Number(f.get("number")),p_name:f.get("name").trim()||null,p_equipment_codes:codes,p_location_text:f.get("location_text").trim()||null,p_capacity:f.get("capacity")?Number(f.get("capacity")):null,p_notes:f.get("notes").trim()||null});setBusy(b,false);if(error)return notify(errText(error),"error");notify(record?"Carrinho atualizado.":"Carrinho criado.","success");m.remove();renderCarts()})
+  if(item?.qr_token && (!item.equipment_codes || !item.equipment_codes.length)){
+    const {data}=await supabase.rpc("cart_scan_equipment_list_v2",{p_qr_token:item.qr_token});
+    record={...item,equipment_codes:(data||[]).map(x=>x.code)}
+  }
+  const codeValue=esc((record?.equipment_codes||[]).join("\n"));
+  const m=makeModal(`<div class="ref-modal-shell ref-cart-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Lotes · Carrinhos</span><h2>${record?"Editar carrinho":"Novo carrinho"}</h2><p>Organize equipamentos por conjunto, com localização e capacidade.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item active" type="button"><span>${uiIcon("carts",18)}</span><div><strong>Dados do carrinho</strong><small>Número, nome e local</small></div></button><button class="ref-modal-nav-item" type="button" disabled><span>${uiIcon("equipment",18)}</span><div><strong>Equipamentos</strong><small>Lista por código</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Separe os códigos linha por linha. Isso evita confusão, o hobby favorito de qualquer inventário mal feito.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Administração</span><h2>${record?"Editar carrinho":"Cadastrar carrinho"}</h2><p>Cadastre um carrinho para retirada seletiva por QR Code.</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div class="ref-modal-banner"><span class="report-mini-icon">${uiIcon("carts",20)}</span><div><strong>Cadastro de carrinho</strong><p>Defina estrutura, capacidade e composição do lote.</p></div></div><div class="modal-body ref-modal-body"><form id="cart-form" class="form-grid ref-form-grid"><div class="ref-section-title span-2">Informações básicas</div><label>Número *<input name="number" type="number" min="1" required value="${esc(record?.number||"")}" placeholder="Ex.: 1"></label><label>Nome<input name="name" maxlength="120" value="${esc(record?.name||"")}" placeholder="Ex.: Carrinho 1"></label><label>Localização<input name="location_text" maxlength="160" value="${esc(record?.location_text||"")}" placeholder="Ex.: Sala maker"></label><label>Capacidade<input name="capacity" type="number" min="1" max="200" value="${esc(record?.capacity||"")}" placeholder="Ex.: 36"></label><div class="ref-section-title span-2">Composição do carrinho</div><label class="span-2">Códigos dos equipamentos<textarea name="codes" required placeholder="CB-001&#10;CB-002&#10;CB-003">${codeValue}</textarea></label><label class="span-2">Observações<textarea name="notes" maxlength="1200" placeholder="Informações operacionais do carrinho">${esc(record?.notes||"")}</textarea></label><div class="modal-actions span-2 ref-form-actions"><button class="button ghost" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar carrinho</button></div></form></div></div></div>`,true);
+  qs("#cart-form",m).addEventListener("submit",async e=>{
+    e.preventDefault();
+    const b=qs('button[type="submit"]',e.currentTarget);
+    setBusy(b,true,"Salvando…");
+    const f=new FormData(e.currentTarget);
+    const codes=[...new Set(String(f.get("codes")||"").split(/[\n,;]+/).map(x=>x.trim()).filter(Boolean))];
+    const {error}=await supabase.rpc("save_equipment_cart_v2",{p_cart_id:record?.id?Number(record.id):null,p_number:Number(f.get("number")),p_name:f.get("name").trim()||null,p_equipment_codes:codes,p_location_text:f.get("location_text").trim()||null,p_capacity:f.get("capacity")?Number(f.get("capacity")):null,p_notes:f.get("notes").trim()||null});
+    setBusy(b,false);
+    if(error)return notify(errText(error),"error");
+    notify(record?"Carrinho atualizado.":"Carrinho criado.","success");
+    m.remove();
+    renderCarts()
+  })
 }
+
 async function deactivateCart(record){const ok=await confirmAction({title:"Desativar carrinho?",message:`${record.name||`Carrinho ${record.number}`} deixará de aparecer para operação, mas o histórico será preservado.`,confirmText:"Desativar",danger:true});if(!ok)return;const {error}=await supabase.from("equipment_carts").update({is_active:false}).eq("id",Number(record.id));if(error)return notify(errText(error),"error");notify("Carrinho desativado.","success");renderCarts()}
 
 async function renderMaintenance(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="maintenance";const filterCount=activeFilterCount([state.maintenanceStatus]);shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Oficina</span><h2>Histórico de manutenção</h2><p>Ocorrências técnicas e intervenções ficam organizadas em uma única linha do tempo.</p></div></div><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="maintenance-search" class="search" type="search" value="${esc(state.maintenanceSearch)}" placeholder="Buscar equipamento, título ou observação"><button class="filter-button ${filterCount ? 'has-active active' : ''}" id="maintenance-filter-toggle" type="button" aria-expanded="${filterCount ? 'true' : 'false'}">${icon("filter")}<span>Filtros</span>${filterBadge(filterCount)}</button></div></div><div class="filter-drawer" id="maintenance-filter-panel"><div class="filter-grid"><label>Status<select id="maintenance-status"><option value="">Todos</option><option value="open" ${state.maintenanceStatus==='open'?'selected':''}>Aberta</option><option value="resolved" ${state.maintenanceStatus==='resolved'?'selected':''}>Resolvida</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="maintenance-filter-clear" type="button">Limpar filtros</button><button class="button primary small" id="maintenance-filter-apply" type="button">Aplicar</button></div></div><div id="maintenance"><div class="loading">Carregando…</div></div></section>`);const {data,error}=await supabase.from("maintenance_events").select("id,equipment_id,title,notes,resolution,status,opened_at,closed_at,equipments(code,label,brand,model)").order("opened_at",{ascending:false}).limit(300);const h=qs("#maintenance");if(error){h.innerHTML=`<div class="empty"><strong>Erro.</strong><span>${esc(errText(error))}</span></div>`;return}let rows=data||[];rows=smartFilter(rows,state.maintenanceSearch,x=>[x.title,x.notes,x.resolution,x.equipments?.label,x.equipments?.code,x.equipments?.brand,x.equipments?.model,statusLabel(x.status)]);if(state.maintenanceStatus)rows=rows.filter(x=>x.status===state.maintenanceStatus);if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhuma manutenção registrada.</strong><span>Abra um equipamento e escolha Manutenção.</span></div>`;}else{h.innerHTML=`<div class="data-list">${rows.map(x=>`<div class="data-row"><div class="data-main"><strong>${esc(x.equipments?.label||x.equipments?.code)} · ${esc(x.title)}</strong><span>${esc(x.equipments?.brand||"")} ${esc(x.equipments?.model||"")} · aberta ${esc(dt(x.opened_at))}</span></div><span class="status status-${esc(x.status)}">${esc(statusLabel(x.status))}</span><div class="row-actions">${x.status==="open"?`<button class="button primary small" data-resolve="${x.id}">Concluir</button>`:""}</div></div>`).join("")}</div>`;qsa("[data-resolve]").forEach(b=>b.addEventListener("click",()=>resolveMaintenance(Number(b.dataset.resolve))));}let timer;qs("#maintenance-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.maintenanceSearch=e.target.value;renderMaintenance()},180)});wireFilterToggle("maintenance-filter-toggle", "maintenance-filter-panel");qs("#maintenance-filter-apply")?.addEventListener("click",()=>{state.maintenanceStatus=qs("#maintenance-status")?.value||"";renderMaintenance()});qs("#maintenance-filter-clear")?.addEventListener("click",()=>{state.maintenanceStatus="";renderMaintenance()});}
 function resolveMaintenance(id){const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Manutenção</span><h2>Concluir manutenção</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="resolve-form" class="auth-form"><label>Resolução<textarea name="resolution" maxlength="1200" placeholder="O que foi feito"></textarea></label><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Concluir</button></div></form></div>`);qs("#resolve-form",m).addEventListener("submit",async e=>{e.preventDefault();const b=qs('button[type="submit"]',e.currentTarget);setBusy(b,true,"Concluindo…");const f=new FormData(e.currentTarget);const {error}=await supabase.rpc("resolve_maintenance",{p_event_id:id,p_resolution:f.get("resolution").trim()||null});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Manutenção concluída.","success");m.remove();renderMaintenance()})}
 
+
 async function renderReports() {
   if(state.profile.role!=="admin") return navigate("dashboard");
   state.view="reports";
-  const end=new Date();const from=new Date(Date.now()-30*86400000);
-  shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Indicadores operacionais</span><h2>Relatórios</h2><p>Indicadores calculados no PostgreSQL, sem baixar todo o histórico.</p></div></div>
-    <div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><label>De<input id="report-from" type="date" value="${from.toISOString().slice(0,10)}"></label><label>Até<input id="report-to" type="date" value="${end.toISOString().slice(0,10)}"></label><button class="button primary" id="report-apply">Atualizar</button></div></div>
+  const end=new Date();
+  const from=new Date(Date.now()-30*86400000);
+  shell(`<section class="panel workspace-panel reports-workspace"><div class="panel-head workspace-head report-top-head"><div class="report-hero"><span class="report-hero-icon">${uiIcon("reports",24)}</span><div><span class="eyebrow">Relatórios</span><h2>Relatórios</h2><p>Acompanhe uso, reservas, manutenções e retiradas dos equipamentos da escola.</p></div></div><div class="report-head-actions"><button class="button ghost" id="report-export" type="button">${uiIcon("upload",18)}<span>Exportar relatório</span></button></div></div>
+    <div class="report-filter-strip">
+      <label><span>Período</span><input id="report-from" type="date" value="${from.toISOString().slice(0,10)}"></label>
+      <label><span>Até</span><input id="report-to" type="date" value="${end.toISOString().slice(0,10)}"></label>
+      <label><span>Turma</span><input id="report-class" type="text" placeholder="Todas"></label>
+      <label><span>Tipo de equipamento</span><select id="report-group"><option value="">Todos</option>${schoolGroupOptions()}</select></label>
+      <label><span>Situação</span><select id="report-status"><option value="">Todas</option><option value="available">Disponível</option><option value="in_use">Em uso</option><option value="maintenance">Manutenção</option><option value="unavailable">Indisponível</option></select></label>
+      <button class="button primary" id="report-apply" type="button">${uiIcon("rotate",18)}<span>Atualizar</span></button>
+    </div>
     <div id="report-results"><div class="loading">Calculando indicadores…</div></div></section>`);
   qs("#report-apply")?.addEventListener("click",loadReports);
+  qs("#report-export")?.addEventListener("click",exportCurrentReport);
   await loadReports();
 }
 async function loadReports() {
   const host=qs("#report-results");if(!host)return;
   const start=qs("#report-from")?.value;const finish=qs("#report-to")?.value;
+  const className=(qs("#report-class")?.value||"").trim().toLowerCase();
+  const groupFilter=qs("#report-group")?.value||"";
+  const statusFilter=qs("#report-status")?.value||"";
   if(!start||!finish||start>finish) return notify("Confira o intervalo do relatório.","warning");
-  const startDate=new Date(start+"T00:00:00");const endDate=new Date(finish+"T00:00:00");endDate.setDate(endDate.getDate()+1);
-  const {data,error}=await supabase.rpc("equipa_admin_reports",{p_from:startDate.toISOString(),p_to:endDate.toISOString()});
-  if(error){host.innerHTML=`<div class="empty"><strong>Não foi possível calcular o relatório.</strong><span>${esc(errText(error))}</span></div>`;return;}
-  const fields=[["Reservas",data.reservations],["Cancelamentos",data.cancelled],["Reservas expiradas",data.expired],["Retiradas",data.withdrawals],["Equipamentos utilizados",data.used_equipment],["Itens devolvidos",data.returned],["Com avaria",data.damaged],["Retiradas atrasadas em aberto",data.late_open],["Manutenções abertas",data.maintenance_open],["Duração média (min)",data.avg_minutes??"—"]];
-  host.innerHTML=`<div class="report-grid">${fields.map(([label,value])=>`<div class="report-item"><span>${esc(label)}</span><strong>${esc(value ?? 0)}</strong></div>`).join("")}</div>
-    <div class="panel-head"><h3>Equipamentos mais utilizados no período</h3></div>
-    <div class="data-list">${(data.top_equipment||[]).map((x,i)=>`<div class="data-row"><strong>${i+1}. ${esc(x.code)}</strong><span>${Number(x.uses)} retirada(s)</span></div>`).join("")||'<div class="empty">Sem movimentações neste período.</div>'}</div>`;
+  const startDate=new Date(start+"T00:00:00");
+  const endDate=new Date(finish+"T00:00:00");endDate.setDate(endDate.getDate()+1);
+  const [{data,error},{data:equipmentRows,error:eqError},{data:withdrawRows,error:wdError},{data:reservationRows,error:rsError},{data:maintenanceRows,error:mtError}] = await Promise.all([
+    supabase.rpc("equipa_admin_reports",{p_from:startDate.toISOString(),p_to:endDate.toISOString()}),
+    supabase.from("equipments").select("id,code,model,school_group,status,is_active").order("code"),
+    supabase.from("withdrawals").select("id,class_name,withdrawn_at,due_at,status").gte("withdrawn_at",startDate.toISOString()).lt("withdrawn_at",endDate.toISOString()).order("withdrawn_at"),
+    supabase.from("reservations").select("id,class_name,start_at,status,quantity").gte("start_at",startDate.toISOString()).lt("start_at",endDate.toISOString()).order("start_at"),
+    supabase.from("maintenance_events").select("id,status,opened_at").or(`opened_at.gte.${startDate.toISOString()},closed_at.gte.${startDate.toISOString()}`)
+  ]);
+  if(error||eqError||wdError||rsError||mtError){host.innerHTML=`<div class="empty"><strong>Não foi possível calcular o relatório.</strong><span>${esc(errText(error||eqError||wdError||rsError||mtError))}</span></div>`;return;}
+  let equipments=(equipmentRows||[]).filter(x=>x.is_active!==false);
+  if(groupFilter) equipments=equipments.filter(x=>x.school_group===groupFilter);
+  if(statusFilter) equipments=equipments.filter(x=>x.status===statusFilter);
+  const statusCounts={available:0,in_use:0,maintenance:0,unavailable:0};
+  equipments.forEach(x=>{statusCounts[x.status] = (statusCounts[x.status]||0)+1});
+  const totalEquip=Math.max(1,equipments.length);
+  let withdrawals=(withdrawRows||[]);
+  let reservations=(reservationRows||[]);
+  if(className){
+    withdrawals=withdrawals.filter(x=>String(x.class_name||"").toLowerCase().includes(className));
+    reservations=reservations.filter(x=>String(x.class_name||"").toLowerCase().includes(className));
+  }
+  const totalActsByDay = {};
+  const addDay=(key)=>{totalActsByDay[key]=(totalActsByDay[key]||0)+1};
+  withdrawals.forEach(w=>addDay((w.withdrawn_at||"").slice(0,10)));
+  reservations.forEach(r=>addDay((r.start_at||"").slice(0,10)));
+  const days=[]; const cursor=new Date(startDate);
+  while(cursor<endDate){days.push(cursor.toISOString().slice(0,10));cursor.setDate(cursor.getDate()+1)}
+  const maxDay=Math.max(1,...days.map(d=>totalActsByDay[d]||0));
+  const top=(data?.top_equipment||[]).slice(0,5);
+  const avgMinutes=Number(data?.avg_minutes||0);
+  host.innerHTML=`<div class="report-dashboard-grid">
+      <section class="report-card report-usage-card">
+        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("equipment",20)}</span><div><h3>Uso dos equipamentos</h3><p>Distribuição atual do inventário</p></div></div>
+        <div class="report-usage-body">
+          <div class="report-donut" style="--p1:${(statusCounts.in_use/totalEquip)*100}%;--p2:${((statusCounts.in_use+statusCounts.available)/totalEquip)*100}%;--p3:${((statusCounts.in_use+statusCounts.available+statusCounts.unavailable)/totalEquip)*100}%"><div class="report-donut-center"><strong>${equipments.length}</strong><span>total</span></div></div>
+          <div class="report-legend">
+            <div><i class="legend-green"></i><span>Em uso</span><b>${statusCounts.in_use}</b><small>${Math.round((statusCounts.in_use/totalEquip)*100)}%</small></div>
+            <div><i class="legend-blue"></i><span>Disponíveis</span><b>${statusCounts.available}</b><small>${Math.round((statusCounts.available/totalEquip)*100)}%</small></div>
+            <div><i class="legend-slate"></i><span>Indisponíveis</span><b>${statusCounts.unavailable}</b><small>${Math.round((statusCounts.unavailable/totalEquip)*100)}%</small></div>
+          </div>
+        </div>
+      </section>
+      <section class="report-card report-maint-card">
+        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("maintenance",20)}</span><div><h3>Manutenções</h3><p>Pendências técnicas ativas</p></div></div>
+        <div class="report-center-metric"><strong>${Number(data?.maintenance_open||0)}</strong><span>manutenções abertas</span></div>
+        <button class="report-inline-action" type="button" data-go-report-maint>Ver manutenções ${uiIcon("arrow",17)}</button>
+      </section>
+      <section class="report-card report-time-card">
+        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("history",20)}</span><div><h3>Tempo médio de uso</h3><p>Baseado nas retiradas finalizadas</p></div></div>
+        <div class="report-center-metric"><strong>${avgMinutes?`${Math.round(avgMinutes)} min`:'—'}</strong><span>por retirada</span></div>
+        <div class="report-note">Baseado nas retiradas finalizadas no período selecionado.</div>
+      </section>
+      <section class="report-card report-table-card">
+        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("reports",20)}</span><div><h3>Equipamentos mais utilizados</h3><p>Lista dos equipamentos com mais retiradas no período.</p></div></div>
+        <div class="report-table-wrap"><table class="report-table"><thead><tr><th>#</th><th>Equipamento</th><th>Modelo</th><th>Quantidade</th><th>Tempo total</th></tr></thead><tbody>${top.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code||'—')}</td><td>${esc(x.model||'Não informado')}</td><td>${Number(x.uses||0)}</td><td>${Number(x.minutes||0)?`${Number(x.minutes)} min`:'—'}</td></tr>`).join('')||'<tr><td colspan="5" class="report-empty-cell">Sem movimentações no período.</td></tr>'}</tbody></table></div>
+      </section>
+      <section class="report-card report-chart-card">
+        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><h3>Atividades por dia</h3><p>Quantidade de retiradas e reservas por dia.</p></div></div>
+        <div class="report-bars">${days.map(day=>{const value=totalActsByDay[day]||0;const h=Math.max(8,Math.round((value/maxDay)*100));return `<div class="report-bar-col"><div class="report-bar-track"><div class="report-bar-fill" style="height:${h}%"></div></div><span>${day.slice(8,10)}/${day.slice(5,7)}</span></div>`}).join('')}</div>
+      </section>
+    </div>`;
+  qs("[data-go-report-maint]")?.addEventListener("click",()=>navigate("maintenance"));
+}
+async function exportCurrentReport(){
+  const start=qs("#report-from")?.value||new Date().toISOString().slice(0,10);
+  const finish=qs("#report-to")?.value||start;
+  try {
+    const from=new Date(start+"T00:00:00");const to=new Date(finish+"T23:59:59");
+    const {data,error}=await supabase.rpc("equipa_admin_reports",{p_from:from.toISOString(),p_to:to.toISOString()});
+    if(error) throw error;
+    const lines=[['Métrica','Valor'],['Reservas',data?.reservations??0],['Cancelamentos',data?.cancelled??0],['Reservas expiradas',data?.expired??0],['Retiradas',data?.withdrawals??0],['Equipamentos utilizados',data?.used_equipment??0],['Itens devolvidos',data?.returned??0],['Com avaria',data?.damaged??0],['Retiradas atrasadas em aberto',data?.late_open??0],['Manutenções abertas',data?.maintenance_open??0],['Duração média (min)',data?.avg_minutes??'']];
+    const csv=lines.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(';')).join('\n');
+    downloadBlob(new Blob([csv],{type:'text/csv;charset=utf-8;'}),`Equipa-relatorio-${start}-${finish}.csv`);
+    notify('Relatório exportado.','success');
+  } catch(error){ notify(errText(error),'error'); }
 }
 
-async function renderAdmin(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="admin";shell(`<section class="admin-workspace"><div class="admin-titlebar"><div><span class="eyebrow">Administração</span><h2>Central administrativa</h2><p>Aprovação de contas, cargos, capacidade e ferramentas do inventário.</p></div></div><div class="split admin-grid"><section class="panel admin-users"><div class="panel-head"><div><span class="eyebrow">Pessoas</span><h2>Usuários e acessos</h2></div></div><div id="users"><div class="loading">Carregando usuários…</div></div></section><div class="stack admin-side"><section class="panel"><div class="panel-head"><div><span class="eyebrow">Armazenamento</span><h2>Capacidade do banco</h2></div></div><div id="capacity"><div class="loading">Medindo…</div></div></section><section class="panel"><div class="panel-head"><div><span class="eyebrow">Ferramentas</span><h2>Inventário</h2></div></div><div class="panel-pad quick-grid"><div class="quick-card"><strong>Importar planilha</strong><span>Valida CSV/XLSX no navegador.</span><button class="button small" id="admin-import">Importar</button></div><div class="quick-card"><strong>Exportar inventário</strong><span>Gera uma planilha do cadastro atual.</span><button class="button small" id="admin-export">Exportar</button></div><div class="quick-card"><strong>QRs para impressão</strong><span>Folha dos equipamentos ativos.</span><button class="button small" id="admin-qrs">Imprimir</button></div><div class="quick-card"><strong>QRs em arquivos</strong><span>Baixa todos os QR Codes em um ZIP.</span><button class="button small" id="admin-download-qrs">Baixar todos</button></div><div class="quick-card"><strong>Auditoria</strong><span>Consulte alterações e operações registradas.</span><button class="button small" id="admin-audit">Abrir auditoria</button></div></div></section></div></div></section>`);qs("#admin-import")?.addEventListener("click",()=>window.EquipaInventory.openHub("import"));qs("#admin-export")?.addEventListener("click",exportEquipments);qs("#admin-qrs")?.addEventListener("click",()=>window.EquipaInventory.chooseLabels());qs("#admin-download-qrs")?.addEventListener("click",downloadAllEquipmentQrs);qs("#admin-audit")?.addEventListener("click",()=>navigate("audit"));await Promise.all([loadAdminUsers(),loadCapacity()]);}
-async function loadAdminUsers(){const {data,error}=await supabase.rpc("admin_user_list_safe");const h=qs("#users");if(!h)return;if(error){h.innerHTML=`<div class="empty"><strong>Erro ao carregar usuários.</strong><span>${esc(errText(error))}</span></div>`;return}const now=Date.now();h.innerHTML=`<div class="data-list">${(data||[]).map(u=>{const banned=Boolean(u.banned_until&&new Date(u.banned_until).getTime()>now);const rec={id:u.id,full_name:u.full_name,role:u.role,masked_email:u.masked_email,is_active:u.is_active,is_banned:banned,banned_until:u.banned_until};return `<button class="data-row user-row" type="button" data-user='${esc(JSON.stringify(rec))}'><div class="data-main"><strong>${esc(u.full_name||"Usuário")}</strong><span>${esc(u.masked_email||"—")} · ${esc(roleLabel(u.role))}</span></div><span class="status ${!u.is_active?'status-maintenance':banned?'status-cancelled':'status-available'}">${!u.is_active?'Pendente/removido':banned?'Banido':'Ativo'}</span><span class="data-date">${esc(dateOnly(u.created_at))}</span></button>`}).join("")}</div>`;qsa("[data-user]").forEach(b=>b.addEventListener("click",()=>openUserForm(JSON.parse(b.dataset.user))));}
+// Painel de administração: estatísticas reais, perfil mínimo e consulta sob demanda.
+let equipaAdminUsers = [];
+let equipaAdminRoleFilter = "";
+function equipaAdminUserStatus(u) {
+  if (!u.is_active) return {label:"Acesso pendente/inativo",kind:"pending"};
+  if (u.banned_until && new Date(u.banned_until).getTime()>Date.now()) return {label:"Banido",kind:"banned"};
+  return {label:"Ativo",kind:"active"};
+}
+function equipaAdminRenderUserRows() {
+  const host=qs("#admin-users-table-body");if(!host)return;
+  const users=equipaAdminUsers.filter(u=>!equipaAdminRoleFilter||u.role===equipaAdminRoleFilter);
+  if(!users.length) {
+    host.innerHTML=`<tr><td colspan="6" class="ea-empty">Nenhum usuário encontrado.</td></tr>`;
+    return;
+  }
+  host.innerHTML=users.map(u=>{
+    const index=equipaAdminUsers.indexOf(u);
+    const status=equipaAdminUserStatus(u);
+    return `<tr><td><div class="ea-name-cell"><span class="ea-avatar">${esc((u.full_name||"U").trim().slice(0,1).toUpperCase())}</span><div><strong>${esc(u.full_name||"Usuário")}</strong><small>${esc(roleLabel(u.role))}</small></div></div></td>
+    <td class="ea-email">${esc(u.masked_email||"—")}</td><td><span class="ea-role">${esc(roleLabel(u.role))}</span></td>
+    <td><span class="ea-status ea-status-${status.kind}">${esc(status.label)}</span></td>
+    <td class="ea-date" title="O painel atual não possui campo confiável de último acesso">Não disponível</td>
+    <td><button class="ea-action-button" type="button" data-admin-user="${index}" aria-label="Gerenciar ${esc(u.full_name||"usuário")}" title="Gerenciar usuário">${uiIcon("grid",16)}</button></td></tr>`;
+  }).join("");
+  qsa("[data-admin-user]",host).forEach(button=>button.addEventListener("click",()=>{
+    const user=equipaAdminUsers[Number(button.dataset.adminUser)];
+    if(user)openUserForm(user);
+  }));
+}
+function equipaAdminRenderUserSummary(){
+  const rows=equipaAdminUsers;
+  const active=rows.filter(u=>u.is_active&&equipaAdminUserStatus(u).kind==="active").length;
+  const distinct=new Set(rows.map(u=>u.role).filter(Boolean)).size;
+  const usersCount=qs("#ea-users-count"),rolesCount=qs("#ea-roles-count"),userDescription=qs("#ea-users-subtitle"),status=qs("#ea-users-caption");
+  if(usersCount)usersCount.textContent=String(rows.length);
+  if(rolesCount)rolesCount.textContent=String(distinct);
+  if(userDescription)userDescription.textContent=`${active} ativo(s) · ${rows.length-active} pendente(s), inativo(s) ou banido(s)`;
+  if(status)status.textContent=`${rows.length} conta(s) cadastrada(s)`;
+}
+async function renderAdmin(){
+  if(state.profile.role!=="admin")return navigate("dashboard");
+  state.view="admin";equipaAdminRoleFilter="";
+  shell(`<section class="admin-workspace ea-admin" aria-label="Central administrativa">
+    <div class="ea-intro"><span class="eyebrow">Administração</span><h1>Central administrativa</h1><p>Gerencie usuários, permissões, armazenamento e ferramentas do sistema.</p></div>
+    <div class="ea-stats" aria-label="Resumo da administração">
+      <section class="ea-stat ea-stat-blue"><span class="ea-stat-icon">${uiIcon("admin",25)}</span><div class="ea-stat-info"><h2>Usuários</h2><strong id="ea-users-count" aria-live="polite">—</strong><p id="ea-users-subtitle">Carregando contas…</p></div><button type="button" id="ea-manage-users">Gerenciar usuários ${uiIcon("arrow",16)}</button></section>
+      <section class="ea-stat ea-stat-purple"><span class="ea-stat-icon">${uiIcon("audit",25)}</span><div class="ea-stat-info"><h2>Cargos e permissões</h2><strong id="ea-roles-count" aria-live="polite">—</strong><p>Cargos encontrados nas contas cadastradas</p></div><button type="button" id="ea-manage-roles">Gerenciar cargos ${uiIcon("arrow",16)}</button></section>
+      <section class="ea-stat ea-stat-green"><span class="ea-stat-icon">${uiIcon("equipment",25)}</span><div class="ea-stat-info"><h2>Dados do sistema</h2><strong id="ea-equipment-count" aria-live="polite">—</strong><p>Equipamentos cadastrados</p></div><button type="button" id="ea-go-equipment">Ver inventário ${uiIcon("arrow",16)}</button></section>
+      <section class="ea-stat ea-stat-orange"><span class="ea-stat-icon">${uiIcon("pie",25)}</span><div class="ea-stat-info"><h2>Armazenamento</h2><strong id="ea-db-usage" aria-live="polite">—</strong><div class="ea-storage-track"><div id="ea-db-fill" class="ea-storage-fill" style="width:0%"></div></div><p id="ea-db-subtitle">Consultando capacidade…</p></div><button type="button" id="ea-storage-details">Ver armazenamento ${uiIcon("arrow",16)}</button></section>
+    </div>
+    <div class="ea-main-grid"><section class="ea-card ea-users-panel" id="ea-users-section"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("admin",21)}</span><div><h2>Usuários e acessos</h2><p id="ea-users-caption">Contas cadastradas no sistema.</p></div><button class="button ghost ea-head-button" id="ea-see-all" type="button">Ver todos</button></header>
+    <div class="ea-user-controls"><label for="ea-role-filter">Filtrar por cargo</label><select id="ea-role-filter"><option value="">Todos os cargos</option><option value="student">Alunos</option><option value="teacher">Professores</option><option value="admin">Administradores</option></select></div>
+    <div class="ea-table-scroller"><table class="ea-users-table"><thead><tr><th>Nome</th><th>E-mail</th><th>Cargo</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr></thead><tbody id="admin-users-table-body"><tr><td colspan="6" class="ea-empty">Carregando usuários…</td></tr></tbody></table></div>
+    </section><div class="ea-right-col"><section class="ea-card"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("maintenance",21)}</span><div><h2>Ferramentas rápidas</h2><p>Acesse as principais funcionalidades da administração.</p></div></header>
+    <div class="ea-tools"><button type="button" id="ea-import">${uiIcon("upload",22)}<span><strong>Importar planilha</strong><small>CSV, Excel ou tabela Word</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-export">${uiIcon("upload",22)}<span><strong>Exportar inventário</strong><small>Planilha do cadastro atual</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-qrs">${uiIcon("grid",22)}<span><strong>QRs para impressão</strong><small>Etiquetas dos equipamentos</small></span>${uiIcon("arrow",15)}</button><button type="button" id="ea-audit">${uiIcon("audit",22)}<span><strong>Abrir auditoria</strong><small>Consulte operações registradas</small></span>${uiIcon("arrow",15)}</button></div></section>
+    <section class="ea-card"><header class="ea-card-head"><span class="ea-head-icon">${uiIcon("history",21)}</span><div><h2>Atividade recente</h2><p>Últimas operações registradas na auditoria.</p></div><button class="ea-activity-link" id="ea-all-activity" type="button">Ver todas</button></header><div id="ea-activity" class="ea-activity"><p class="ea-muted">Carregando atividades…</p></div></section></div></div>
+    </section>`);
+  const go=(id,cb)=>qs(id)?.addEventListener("click",cb);
+  go("#ea-manage-users",()=>qs("#ea-users-section")?.scrollIntoView({block:"start",behavior:"smooth"}));
+  go("#ea-manage-roles",()=>{qs("#ea-users-section")?.scrollIntoView({block:"start",behavior:"smooth"});qs("#ea-role-filter")?.focus()});
+  go("#ea-see-all",()=>{equipaAdminRoleFilter="";qs("#ea-role-filter").value="";equipaAdminRenderUserRows()});
+  qs("#ea-role-filter")?.addEventListener("change",e=>{equipaAdminRoleFilter=e.target.value;equipaAdminRenderUserRows()});
+  go("#ea-go-equipment",()=>navigate("equipment"));
+  go("#ea-storage-details",()=>{
+    const summary=qs("#ea-db-usage")?.textContent||"Indisponível";
+    const info=qs("#ea-db-subtitle")?.textContent||"";
+    makeModal(`<div class="panel-head"><div><span class="eyebrow">Armazenamento</span><h2>Capacidade do banco</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><p><strong>Uso informado pelo Supabase: ${esc(summary)}</strong></p><p class="muted">${esc(info)}</p><p class="muted">Consulte a capacidade real e faça manutenção no painel autorizado do projeto. Não há limpeza destrutiva automática neste botão.</p><div class="modal-actions"><button class="button primary" type="button" data-close>Entendi</button></div></div>`);
+  });
+  go("#ea-import",()=>window.EquipaInventory?.openHub("import"));
+  go("#ea-export",exportEquipments);
+  go("#ea-qrs",()=>window.EquipaInventory?.chooseLabels());
+  go("#ea-audit",()=>navigate("audit"));
+  go("#ea-all-activity",()=>navigate("audit"));
+  await Promise.allSettled([loadAdminUsers(),equipaAdminLoadCapacity(),equipaAdminLoadEquipmentCount(),equipaAdminLoadRecentActivity()]);
+}
+async function loadAdminUsers(){
+  const {data,error}=await supabase.rpc("admin_user_list_safe");
+  const host=qs("#admin-users-table-body");if(!host)return;
+  if(error){host.innerHTML=`<tr><td colspan="6" class="ea-empty">Não foi possível carregar usuários: ${esc(errText(error))}</td></tr>`;return}
+  equipaAdminUsers=(data||[]).map(u=>({id:u.id,full_name:u.full_name,role:u.role,masked_email:u.masked_email,is_active:u.is_active,is_banned:!!(u.banned_until&&new Date(u.banned_until).getTime()>Date.now()),banned_until:u.banned_until}));
+  equipaAdminRenderUserSummary();equipaAdminRenderUserRows();
+}
+async function equipaAdminLoadCapacity(){
+  const {data,error}=await supabase.rpc("admin_capacity_status");
+  const value=qs("#ea-db-usage"),fill=qs("#ea-db-fill"),subtitle=qs("#ea-db-subtitle");
+  if(!value)return;
+  if(error){value.textContent="Indisponível";if(subtitle)subtitle.textContent="Não foi possível consultar a capacidade.";return}
+  const x=Array.isArray(data)?data[0]:data;
+  if(!x || !Number.isFinite(Number(x.database_mb))){value.textContent="Indisponível";return}
+  const mb=Number(x.database_mb),limit=Number(x.free_limit_mb),percent=limit>0?100*mb/limit:0;
+  value.textContent=`${mb.toLocaleString("pt-BR",{maximumFractionDigits:2})} MB`;
+  if(fill)fill.style.width=`${Math.max(0,Math.min(100,percent))}%`;
+  if(subtitle)subtitle.textContent=limit>0?`${percent.toLocaleString("pt-BR",{maximumFractionDigits:2})}% de ${limit} MB utilizados`:`Uso atual do banco`;
+}
+async function equipaAdminLoadEquipmentCount(){
+  const target=qs("#ea-equipment-count");if(!target)return;
+  const {count,error}=await supabase.from("equipments").select("id",{count:"exact",head:true});
+  target.textContent=error?"Indisponível":Number(count||0).toLocaleString("pt-BR");
+}
+async function equipaAdminLoadRecentActivity(){
+  const host=qs("#ea-activity");if(!host)return;
+  const {data,error}=await supabase.from("audit_events").select("id,occurred_at,actor_name,action,entity_type,summary").order("occurred_at",{ascending:false}).limit(4);
+  if(error){host.innerHTML=`<p class="ea-muted">Não foi possível carregar a atividade recente.</p>`;return}
+  if(!data?.length){host.innerHTML=`<p class="ea-muted">Nenhuma atividade administrativa registrada.</p>`;return}
+  host.innerHTML=data.map(x=>`<div class="ea-event"><span class="ea-event-dot" aria-hidden="true"></span><div><strong>${esc(auditActionLabel(x.action))} · ${esc(auditEntityLabel(x.entity_type))}</strong><small>${esc(x.actor_name||"Sistema")}</small></div><time>${esc(dt(x.occurred_at))}</time></div>`).join("");
+}
 function openUserForm(u){const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Usuário</span><h2>${esc(u.full_name)}</h2><p>${esc(u.masked_email||"")}</p></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="user-form" class="auth-form"><label>Nome<input name="full_name" required maxlength="120" value="${esc(u.full_name)}"></label><label>Cargo<select name="role">${["student","teacher","admin"].map(r=>`<option value="${r}" ${u.role===r?"selected":""}>${roleLabel(r)}</option>`).join("")}</select></label><div class="user-access-actions">${!u.is_active?`<button class="button primary" type="button" data-user-action="approve">Aprovar/restaurar acesso</button>`:`<button class="button danger" type="button" data-user-action="remove">Remover acesso</button>`}${u.is_banned?`<button class="button" type="button" data-user-action="unban">Remover banimento</button>`:`<button class="button danger" type="button" data-user-ban>Banir temporariamente</button>`}</div><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar nome e cargo</button></div></form></div>`);
   qs("#user-form",m).addEventListener("submit",async e=>{e.preventDefault();const b=qs('button[type="submit"]',e.currentTarget);setBusy(b,true,"Salvando…");const f=new FormData(e.currentTarget);const {error}=await supabase.rpc("admin_update_user",{p_user_id:u.id,p_full_name:f.get("full_name").trim(),p_role:f.get("role")});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Usuário atualizado.","success");m.remove();loadAdminUsers()});
   qs('[data-user-action="approve"]',m)?.addEventListener("click",()=>{m.remove();adminUserAction(u,"approve")});qs('[data-user-action="remove"]',m)?.addEventListener("click",()=>{m.remove();adminUserAction(u,"remove")});qs('[data-user-action="unban"]',m)?.addEventListener("click",()=>{m.remove();adminUserAction(u,"unban")});qs('[data-user-ban]',m)?.addEventListener("click",()=>{m.remove();openBanUser(u)});
