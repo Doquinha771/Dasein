@@ -775,3 +775,62 @@ body{background:#f9fbff;color:var(--ink);font-family:Inter,"Segoe UI Variable","
 @media(max-width:990px){.ea-main-grid{grid-template-columns:minmax(0,1fr)}.ea-users-panel{min-height:0}.ea-tools{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.ea-intro{padding:4px 0 16px}.ea-intro h1{font-size:27px}.ea-intro p{font-size:12px}.ea-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.ea-stat{grid-template-columns:1fr;min-height:190px;padding:12px;gap:0}.ea-stat-icon{grid-row:auto;width:38px;height:38px;margin-bottom:8px}.ea-stat-icon svg{width:19px}.ea-stat-info{grid-row:auto}.ea-stat-info h2{font-size:11px;line-height:1.3}.ea-stat-info strong{font-size:22px}.ea-stat-info p{font-size:10px;line-height:1.35}.ea-stat>button{font-size:10px;padding:7px 4px;gap:4px;margin-top:8px}.ea-stat>button svg{width:12px}.ea-main-grid{gap:10px}.ea-card-head{padding:12px}.ea-head-icon{width:34px;height:34px;flex-basis:34px}.ea-card-head h2{font-size:13px}.ea-card-head p{font-size:10px}.ea-user-controls{justify-content:flex-start}.ea-tools{gap:8px;padding:10px}.ea-tools button{padding:8px;gap:5px}.ea-tools button>svg:first-child{width:18px}.ea-event{grid-template-columns:7px minmax(0,1fr)}.ea-event time{grid-column:2;text-align:left}.ea-table-scroller{overflow-x:auto}}
 @media(prefers-reduced-motion:reduce){.ea-stat>button,.ea-storage-fill,.ea-tools button{transition:none!important}}
+
+/* Equipa 0.2.1 Alpha — desktop em escala visual de 120%.
+   Não usar transform:scale(): altera a hitbox e desloca fixed/sticky. */
+@media (min-width: 821px) {
+  body { zoom: 1.2; }
+
+  /* A barra fica ancorada na janela, sem participar do scroll do conteúdo. */
+  .app-shell {
+    --equipa-sidebar-width: 256px;
+    display: block !important;
+    min-height: 100dvh;
+    width: 100%;
+  }
+  .app-shell > .sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: var(--equipa-sidebar-width) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #526178 transparent;
+    z-index: 30;
+  }
+  .app-shell > .main {
+    margin-left: var(--equipa-sidebar-width) !important;
+    width: calc(100% - var(--equipa-sidebar-width)) !important;
+    min-width: 0;
+  }
+  .app-shell .sidebar .nav { flex: 0 0 auto; }
+  .app-shell .sidebar .sidebar-user { flex-shrink: 0; }
+  .app-shell .sidebar .logout-button { flex-shrink: 0; }
+}
+
+/* Em resoluções intermediárias, mantém a proporção de 120% e recupera espaço útil. */
+@media (min-width: 821px) and (max-width: 1170px) {
+  .app-shell { --equipa-sidebar-width: 220px; }
+}
+
+/* Mobile continua na escala nativa e o menu abre por cima, somente sob ação do usuário. */
+@media (max-width: 820px) {
+  body { zoom: 1; }
+  .app-shell > .main { margin-left: 0 !important; width: 100% !important; }
+  .app-shell > .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+}
