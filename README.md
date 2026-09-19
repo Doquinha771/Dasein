@@ -4,7 +4,7 @@
 
 **Gestão responsável de equipamentos escolares.**
 
-![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1.1--alpha-5d666d?style=for-the-badge)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1.2--alpha-5d666d?style=for-the-badge)
 ![Plataforma](https://img.shields.io/badge/plataforma-web-69737a?style=for-the-badge)
 ![Estado](https://img.shields.io/badge/estado-alpha%20em%20testes-78838a?style=for-the-badge)
 ![Privacidade](https://img.shields.io/badge/privacidade-LGPD-626d74?style=for-the-badge)
@@ -103,11 +103,15 @@ Contas novas podem permanecer aguardando aprovação antes de receber acesso ao 
 
 A área de auditoria permite acompanhar eventos relevantes, como alterações no inventário, movimentações, reservas, manutenção, carrinhos, contas e aceites legais. O histórico administrativo é preservado para evitar que a exclusão de um cadastro elimine a rastreabilidade de ações anteriores.
 
+## Integração com Supabase
+
+O projeto Supabase conectado é `oxcfbsrukzfnzkivatsn`. As migrations corretivas 0.2.1 e 0.2.1.1 já foram aplicadas ao projeto, junto do Cron de auditorias. Para publicar no GitHub Pages, consulte `HOTFIX-0.2.1.2-SUPABASE.md`. A tela de login tem o botão **Testar conexão**.
+
 ## Estado do projeto
 
 ```text
 Nome        Equipa
-Versão      0.2.1.1 Alpha
+Versão      0.2.1.2 Alpha
 Plataforma  Web responsiva
 Uso         Gestão de equipamentos escolares
 Estado      Alpha · testes e piloto restrito

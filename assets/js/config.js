@@ -1,10 +1,11 @@
 window.EQUIPA_CONFIG = Object.freeze({
   appName: "Equipa",
-  version: "0.2.1.1 Alpha",
+  version: "0.2.1.2 Alpha",
   legalTermsVersion: "2026.09.19",
   privacyVersion: "2026.09.19",
   controllerName: "Unidade escolar responsável pelo Equipa",
   privacyContact: "Canal oficial da escola",
+  supabaseProjectRef: "oxcfbsrukzfnzkivatsn",
   supabaseUrl: "https://oxcfbsrukzfnzkivatsn.supabase.co",
   supabasePublishableKey: "sb_publishable_gu7AVR7fbvPE_GQ4XIW2IQ_iTFAzyne",
   pageSize: 24,

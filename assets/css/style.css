@@ -1251,3 +1251,12 @@ html[data-theme="dark"] .ref-form-grid input,html[data-theme="dark"] .ref-form-g
   .auth-watermark{width:100%!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:0 16px!important;margin:0!important;text-align:center!important}
 }
 @media (max-width:820px){.auth-watermark{width:auto!important;max-width:100%!important;align-self:stretch!important;box-sizing:border-box!important}}
+
+/* 0.2.1.2 - Supabase connection diagnostics, mobile-friendly. */
+.connection-check{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border, #dde4eb);border-radius:12px;background:var(--surface, #fff);margin:12px 0;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.connection-check span{flex:1;min-width:0}
+.connection-check [data-state="connected"]{color:#166534}
+.connection-check [data-state="offline"],.connection-check [data-state="schema"],.connection-check [data-state="credentials"],.connection-check [data-state="api_error"],.connection-check [data-state="auth_error"]{color:#b42318}
+.connection-check [data-state="restricted"]{color:#9a6700}
+.connection-check .link-button{min-height:44px;min-width:112px;white-space:normal;text-align:center}
+@media(max-width:420px){.connection-check{align-items:stretch}.connection-check .link-button{width:100%;text-align:center}}

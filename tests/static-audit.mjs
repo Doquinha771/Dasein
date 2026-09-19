@@ -5,7 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 const app = read('assets/js/app.js');
 const browserClient = read('assets/js/supabase.js');
 const config = read('assets/js/config.js');
-const migration = read('supabase/migrations/20260919190000_equipa_0_2_1_pilot_readiness.sql');
+const migration = read('supabase/migrations/20260919205228_equipa_0_2_1_pilot_readiness.sql');
 const edge = read('supabase/functions/equipa-admin-users/index.ts');
 
 assert(!/service_role|SUPABASE_SERVICE_ROLE_KEY/i.test(config), 'Segredo administrativo encontrado no config do navegador');

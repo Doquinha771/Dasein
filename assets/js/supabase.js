@@ -19,6 +19,13 @@ const PROJECT_REF = (() => {
   try { return new URL(API_URL).hostname.split(".")[0] || "equipa"; }
   catch { return "equipa"; }
 })();
+// A configuração é pública, mas precisa apontar para o mesmo projeto em todas as APIs.
+if (config.supabaseProjectRef && PROJECT_REF !== config.supabaseProjectRef) {
+  throw new Error("URL e identificador do projeto Supabase não correspondem.");
+}
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(API_URL) || !/^sb_publishable_[A-Za-z0-9_-]+$/.test(API_KEY)) {
+  throw new Error("URL ou chave pública do Supabase inválida.");
+}
 const STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 const listeners = new Set();
 let memorySession = null;
@@ -317,6 +324,49 @@ function formatFilterValue(value) {
 class EquipaSupabaseClient {
   from(table) { return new QueryBuilder(this, table); }
 
+  // Teste seguro e somente leitura. Não exige login, não expõe token e não
+  // consulta dados pessoais. A checagem de tabela usa limit=0.
+  async diagnoseConnection() {
+    const result = { ok: false, status: "offline", project: PROJECT_REF, code: "NETWORK", detail: "Servidor indisponível." };
+    try {
+      const health = await fetchWithTimeout(`${API_URL}/auth/v1/health`, {
+        method: "GET", headers: { apikey: API_KEY, Accept: "application/json" }, cache: "no-store"
+      }, 6500);
+      if (!health.ok) {
+        result.status = health.status === 401 || health.status === 403 ? "credentials" : "auth_error";
+        result.code = `AUTH_${health.status}`;
+        result.detail = health.status === 401 || health.status === 403
+          ? "Chave pública rejeitada pela API de autenticação."
+          : "A API de autenticação do projeto não respondeu corretamente.";
+        return result;
+      }
+      const response = await fetchWithTimeout(`${API_URL}/rest/v1/equipments?select=id&limit=0`, {
+        method: "GET", headers: { ...authHeaders(), Accept: "application/json" }, cache: "no-store"
+      }, 6500);
+      if (response.ok) {
+        return { ok: true, status: "connected", project: PROJECT_REF, code: "OK", detail: "Autenticação e API do banco respondendo." };
+      }
+      const payload = await parseResponse(response);
+      const code = String(payload?.code || `REST_${response.status}`);
+      const missing = ["PGRST205", "42P01", "PGRST202"].includes(code);
+      const credentials = response.status === 401 && /invalid api key|invalid.*jwt|api key/i.test(String(payload?.message || ""));
+      return {
+        ok: false,
+        status: missing ? "schema" : credentials ? "credentials" : response.status === 401 || response.status === 403 ? "restricted" : "api_error",
+        project: PROJECT_REF,
+        code,
+        detail: missing ? "A tabela de equipamentos não foi encontrada. Verifique as migrations do banco."
+          : credentials ? "O servidor rejeitou a chave pública ou a sessão."
+          : response.status === 401 || response.status === 403 ? "A API responde, mas o banco exige autenticação ou permissões adicionais."
+          : "O banco respondeu com erro. Verifique o painel Supabase."
+      };
+    } catch (error) {
+      result.detail = /abort|timeout|tempo limite/i.test(String(error?.name || "") + String(error?.message || ""))
+        ? "O servidor demorou demais para responder." : "Não foi possível alcançar o Supabase. Verifique rede, DNS e projeto.";
+      return result;
+    }
+  }
+
   async rpc(name, params = {}) {
     try {
       const response = await fetchWithTimeout(`${API_URL}/rest/v1/rpc/${encodeURIComponent(name)}`, {
@@ -365,7 +415,10 @@ class EquipaSupabaseClient {
 
     signUp: async ({ email, password, options = {} }) => {
       try {
-        const payload = await authFetch("/signup", { body: { email, password, data: options?.data || {} } });
+        // A confirmação por e-mail precisa voltar para a mesma página do GitHub Pages.
+        // Configure a URL publicada na lista de Redirect URLs do Supabase Auth.
+        const redirectTo = options?.emailRedirectTo || `${location.origin}${location.pathname}`;
+        const payload = await authFetch(`/signup?redirect_to=${encodeURIComponent(redirectTo)}`, { body: { email, password, data: options?.data || {} } });
         let session = null;
         if (payload?.access_token) {
           session = normalizeSession(payload);

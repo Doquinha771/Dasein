@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 const read=p=>readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
-const migration=read('supabase/migrations/20260919210000_equipa_0_2_1_1_mobile_recovery_storage.sql');
+const migration=read('supabase/migrations/20260919205307_equipa_0_2_1_1_mobile_recovery_storage.sql');
 const app=read('assets/js/app.js');
 const client=read('assets/js/supabase.js');
 const css=read('assets/css/style.css');
