@@ -4,7 +4,7 @@
 
 **Gestão responsável de equipamentos escolares.**
 
-![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.0--alpha-5d666d?style=for-the-badge)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1--alpha-5d666d?style=for-the-badge)
 ![Plataforma](https://img.shields.io/badge/plataforma-web-69737a?style=for-the-badge)
 ![Estado](https://img.shields.io/badge/estado-alpha%20em%20testes-78838a?style=for-the-badge)
 ![Privacidade](https://img.shields.io/badge/privacidade-LGPD-626d74?style=for-the-badge)
@@ -40,7 +40,12 @@ Devolução em lote com conferência de avarias e pendências
 Relatórios operacionais agregados
 Histórico por equipamento, pessoa e turma
 Controle de manutenção
-Importação e exportação de inventário
+Cadastro individual, em lote e importação CSV, XLSX ou DOCX estruturado
+Modelos técnicos reutilizáveis com processador, RAM, armazenamento e sistema operacional
+Prévia editável e detecção de duplicados antes da confirmação
+Cadastro transacional de até 200 equipamentos por confirmação
+Etiquetas QR permanentes em PDF por seleção, localização ou inventário
+Exportação de inventário
 Aprovação e controle de acesso de usuários
 Banimento e restauração de acesso
 Auditoria administrativa
@@ -100,7 +105,7 @@ A área de auditoria permite acompanhar eventos relevantes, como alterações no
 
 ```text
 Nome        Equipa
-Versão      0.2.0 Alpha
+Versão      0.2.1 Alpha
 Plataforma  Web responsiva
 Uso         Gestão de equipamentos escolares
 Estado      Alpha · testes e piloto restrito

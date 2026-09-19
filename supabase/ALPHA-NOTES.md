@@ -25,3 +25,17 @@ O teste transacional versionado usa registros sintéticos com rollback e não de
 A Alpha não implementa ainda um novo cargo Funcionário/Técnico com suas políticas, notificações externas automáticas, importação DOCX estruturada ou uma rotina automática de limpeza/arquivamento de todos os logs históricos. O código do frontend no GitHub Pages continua público por natureza; a autorização é imposta no Supabase e não pela ocultação dos arquivos. Os textos legais precisam de revisão e identificação do canal de privacidade pela unidade escolar antes de adoção geral.
 
 Para uma instalação totalmente nova, os arquivos históricos deste pacote pressupõem o esquema-base do Aloca+ (migrations antigas anteriores à conversão para web). O pacote da Alpha não substitui o backup integral desse esquema-base. Não execute migrations antigas novamente sobre a produção já atualizada.
+
+
+## 0.2.1 Alpha — Inventário e cadastro
+
+- `equipment_models`: modelos técnicos reutilizáveis, RLS administrativa.
+- `equipments`: processador, RAM, armazenamento e SO preservados no equipamento.
+- `equipa_register_equipment_batch`: inserção transacional de 1–200 itens; rejeita duplicados; retorno dos UUIDs e QR tokens.
+- `equipa_existing_codes`: prévia consultando inventário, sem substituir a restrição única no banco.
+- Números/códigos são únicos na base da unidade escolar, ignorando caixa e espaços externos. A estrutura atual é de uma escola por banco; implantação multiescola exigiria `school_id` e política de escopo própria.
+- Recibos temporários de idempotência são limpos depois de 14 dias durante novos cadastros, minimizando o impacto no limite do PostgreSQL.
+- Teste transacional de 30 equipamentos, prévia e uso de modelos aprovado no Supabase; interfaces desktop/mobile validadas com backend simulado.
+- Importação DOCX requer tabela com cabeçalhos; documentos Word de texto livre não são interpretados.
+- PDF e importação Excel dependem de bibliotecas de carregamento sob demanda via CDN; o teste de composição PDF usou renderizador simulado, sendo necessária validação do download real no navegador da escola.
+- Antes do uso geral: testar duas sessões ADM confirmando o mesmo código simultaneamente, PDF impresso, arquivo real XLSX/DOCX e restauração a partir das migrations.
