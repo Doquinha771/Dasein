@@ -339,6 +339,7 @@ function greeting() {
   return "Boa noite";
 }
 const UI_GLYPHS = {
+  qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3m-3 3h3m0-3v3M14 20v1"/>',
  dashboard:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
  equipment:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
  withdrawals:'<path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/>',
@@ -371,9 +372,12 @@ const UI_GLYPHS = {
 function uiIcon(name, size=19) { const p=UI_GLYPHS[name]||UI_GLYPHS.grid;return `<svg class="ui-icon" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`; }
 function icon(name){return uiIcon(name);}
 
-function cleanupTransientUi(){closeContextMenu?.();qs("#filter-mobile-shade")?.remove();document.body.classList.remove("filter-sheet-open");}
+function cleanupTransientUi(){closeContextMenu?.();qs("#filter-mobile-shade")?.remove();qsa("body > .filter-drawer").forEach(el=>el.remove());document.body.classList.remove("filter-sheet-open","mobile-overlay-open","mobile-sidebar-open");}
 function renderPendingApproval(){app.innerHTML=`<main class="pending-access"><div class="pending-card"><div class="brandmark">E</div><span class="eyebrow">Equipa</span><h1>Acesso indisponível</h1><p>Esta conta está aguardando aprovação, suspensa ou teve o acesso removido pela administração da escola. Nenhum inventário ou histórico fica disponível enquanto o acesso não estiver liberado.</p><button class="button primary" id="pending-signout" type="button">Sair da conta</button></div><footer class="equipa-watermark standalone">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer></main>`;qs("#pending-signout")?.addEventListener("click",()=>supabase.auth.signOut());}
+let equipaShellAbort=new AbortController();
 function shell(content) {
+  equipaShellAbort.abort();
+  equipaShellAbort=new AbortController();
   cleanupTransientUi();
   const admin = state.profile?.role === "admin";
   const mobileMoreItems = `${nav("reservations","Reservas")}${nav("history","Histórico")}${nav("carts","Carrinhos")}${admin ? nav("maintenance","Manutenção") + nav("reports","Relatórios") + nav("audit","Auditoria") + nav("admin","Administração") : ""}`;
@@ -385,30 +389,42 @@ function shell(content) {
       </nav>
       <div class="sidebar-user"><div class="sidebar-user-avatar" aria-hidden="true">${esc(firstName().slice(0,1).toUpperCase())}</div><div class="sidebar-user-copy"><strong>${esc(state.profile?.full_name||"Usuário")}</strong><span>${esc(roleLabel(state.profile?.role))}</span></div></div><button class="logout-button" id="logout" title="Sair da conta" aria-label="Sair">${uiIcon("logout",18)}<span>Sair</span></button>
     </aside>
+    <button type="button" class="mobile-sidebar-shade" id="mobile-sidebar-shade" aria-label="Fechar menu lateral" tabindex="-1"></button>
     <section class="main">
       <header class="topbar">
-        <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu">☰</button><div class="mobile-top-name"><span class="topbar-kicker">Equipa</span><strong>${esc(pageTitle())}</strong></div></div>
+        <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">☰</button><div class="mobile-top-name"><span class="topbar-kicker">Equipa</span><strong>${esc(pageTitle())}</strong></div></div>
         <form class="global-search" id="global-search-form" role="search">${uiIcon("search",18)}<input id="global-search" type="search" value="${esc(currentGlobalSearchValue())}" placeholder="Pesquisar equipamento, turma, aluno ou manutenção..." autocomplete="off"><kbd>Ctrl K</kbd></form>
         <div class="topbar-right"><button type="button" class="topbar-tool" id="topbar-alerts" aria-label="Ver pendências">${uiIcon("bell",21)}<i></i></button><button type="button" class="topbar-tool" id="topbar-theme" aria-label="Alternar tema">${uiIcon("sun",21)}</button><div class="topbar-divider"></div><div class="school-identification"><span>${uiIcon("school",23)}</span><div><strong>E.E. Amador e Catharina</strong><small>Equipa · Gestão escolar</small></div></div></div>
       </header>
       <main class="content view-${esc(state.view)}">${content}</main><footer class="equipa-watermark">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer>
     </section>
     <nav class="mobile-tabbar" aria-label="Navegação do aplicativo">
-      ${mobileNav("dashboard","Início")}${mobileNav("equipment","Equipamentos")}<button class="mobile-nav-item mobile-qr-action" id="mobile-qr-scan" type="button" aria-label="Ler QR Code">${uiIcon("grid",20)}<small>Ler QR</small></button>${mobileNav("withdrawals","Retiradas")}<button class="mobile-nav-item" id="mobile-more" type="button">${uiIcon("grid",20)}<small>Mais</small></button>
+      ${mobileNav("dashboard","Início")}${mobileNav("equipment","Equipamentos")}<button class="mobile-nav-item mobile-qr-action" id="mobile-qr-scan" type="button" aria-label="Ler QR Code">${uiIcon("qr",20)}<small>Ler QR</small></button>${mobileNav("withdrawals","Retiradas")}<button class="mobile-nav-item mobile-more-action ${["reservations","history","carts","maintenance","reports","audit","admin"].includes(state.view)?"active":""}" id="mobile-more" type="button" aria-haspopup="dialog" aria-expanded="false">${uiIcon("grid",20)}<small>Mais</small></button>
     </nav>
-    <div class="mobile-more-backdrop" id="mobile-more-backdrop"><section class="mobile-more-sheet"><div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><div><span>Mais opções</span><strong>Equipa</strong></div><button class="icon-button" id="mobile-more-close" type="button">×</button></div><div class="mobile-more-list">${mobileMoreItems}</div><button class="mobile-sheet-logout" id="mobile-sheet-logout" type="button"><span>Sair da conta</span></button></section></div>
+    <div class="mobile-more-backdrop" id="mobile-more-backdrop"><section class="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Outras páginas"><div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><div><span>Mais opções</span><strong>Equipa</strong></div><button class="icon-button" id="mobile-more-close" type="button">×</button></div><div class="mobile-more-list">${mobileMoreItems}</div><button class="mobile-sheet-logout" id="mobile-sheet-logout" type="button"><span>Sair da conta</span></button></section></div>
   </div>`;
   qsa("[data-view]").forEach(b => b.addEventListener("click", () => navigate(b.dataset.view)));
-  qs("#menu")?.addEventListener("click", () => qs("#sidebar")?.classList.toggle("open"));
+  const setMobileSidebar = (open) => {
+    qs("#sidebar")?.classList.toggle("open",open);
+    document.body.classList.toggle("mobile-sidebar-open",open);
+    qs("#menu")?.setAttribute("aria-expanded",String(open));
+  };
+  qs("#menu")?.addEventListener("click", () => setMobileSidebar(!qs("#sidebar")?.classList.contains("open")));
+  qs("#mobile-sidebar-shade")?.addEventListener("click",()=>setMobileSidebar(false));
   qs("#logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-sheet-logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-qr-scan")?.addEventListener("click", openMobileQrScanner);
   qs("#topbar-alerts")?.addEventListener("click",()=>{state.withdrawalsStatus="overdue";navigate("withdrawals")});
   qs("#topbar-theme")?.addEventListener("click",()=>document.documentElement.classList.toggle("equipa-dim"));
-  const closeMobileMore = () => qs("#mobile-more-backdrop")?.classList.remove("open");
-  qs("#mobile-more")?.addEventListener("click", () => qs("#mobile-more-backdrop")?.classList.add("open"));
+  const closeMobileMore = () => {qs("#mobile-more-backdrop")?.classList.remove("open");document.body.classList.remove("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","false")};
+  qs("#mobile-more")?.addEventListener("click", () => {qs("#mobile-more-backdrop")?.classList.add("open");document.body.classList.add("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","true")});
   qs("#mobile-more-close")?.addEventListener("click", closeMobileMore);
   qs("#mobile-more-backdrop")?.addEventListener("click", e => { if (e.target?.id === "mobile-more-backdrop") closeMobileMore(); });
+  document.addEventListener("keydown", function mobileShellEscape(e){
+    if(e.key!=="Escape" || !qs(".app-shell")){document.removeEventListener("keydown",mobileShellEscape);return}
+    if(qs("#mobile-more-backdrop")?.classList.contains("open")){closeMobileMore();return}
+    if(qs("#sidebar")?.classList.contains("open"))setMobileSidebar(false);
+  },{signal:equipaShellAbort.signal});
   qsa("#mobile-more-backdrop [data-view]").forEach(b => b.addEventListener("click", closeMobileMore));
   qs("#global-search-form")?.addEventListener("submit", e => {
     e.preventDefault();
@@ -420,7 +436,7 @@ function shell(content) {
 function nav(view, label) { return `<button type="button" class="nav-button ${state.view === view ? "active" : ""}" data-view="${view}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-symbol">${uiIcon(view,20)}</span><span class="nav-label">${esc(label)}</span></button>`; }
 function mobileNav(view,label){return `<button type="button" class="mobile-nav-item ${state.view===view?"active":""}" data-view="${view}">${uiIcon(view,19)}<small>${esc(label)}</small></button>`;}
 async function navigate(view) {
-  state.view = view; qs("#sidebar")?.classList.remove("open");
+  state.view = view; qs("#sidebar")?.classList.remove("open");document.body.classList.remove("mobile-sidebar-open","mobile-overlay-open");
   if (view === "equipment") return renderEquipment();
   if (view === "withdrawals") return renderWithdrawals();
   if (view === "reservations") return renderReservations();
