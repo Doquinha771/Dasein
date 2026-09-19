@@ -2,6 +2,23 @@ const { supabase, config } = window.EquipaSupabase || {};
 if (!supabase || !config) throw new Error("Cliente Supabase não inicializado.");
 
 const app = document.querySelector("#app");
+const EQUIPA_THEME_KEY = "equipa-visual-theme";
+try { document.documentElement.dataset.theme = localStorage.getItem(EQUIPA_THEME_KEY) === "dark" ? "dark" : "light"; }
+catch { document.documentElement.dataset.theme = "light"; }
+function setEquipaTheme(theme) {
+  const dark = theme === "dark";
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#111c2e" : "#f5f8fd");
+  const toggle = qs("#topbar-theme");
+  if (toggle) {
+    toggle.innerHTML = uiIcon(dark ? "moon" : "sun",21);
+    toggle.setAttribute("aria-label", dark ? "Ativar modo claro" : "Ativar modo escuro");
+    toggle.title = dark ? "Modo claro" : "Modo escuro";
+    toggle.setAttribute("aria-pressed",String(dark));
+  }
+  try { localStorage.setItem(EQUIPA_THEME_KEY,dark ? "dark" : "light"); } catch {}
+}
+
 const state = {
   session: null,
   profile: null,
@@ -202,7 +219,7 @@ function renderAuth(scan = null) {
   app.innerHTML = `
   <main class="auth-shell">
     <section class="auth-brand">
-      <div class="brandline"><div class="brandmark">E</div><strong>Equipa</strong></div>
+      <div class="brandline"><strong class="equipa-wordmark">Equipa</strong></div>
       <div class="auth-brand-copy"><span class="eyebrow" style="color:rgba(255,255,255,.65)">Equipamentos escolares</span><h1>Um lugar para saber onde cada equipamento está.</h1><p>Reservas, retiradas, devoluções, carrinhos, QR Codes, manutenção e histórico em um único ambiente escolar.</p></div>
       <span class="auth-version">Equipa ${esc(config.version)} · Web</span>
     </section>
@@ -353,6 +370,7 @@ const UI_GLYPHS = {
  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9M10 21h4"/>',
  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 1v2m0 18v2M1 12h2m18 0h2M4 4l1.5 1.5M18.5 18.5 20 20M20 4l-1.5 1.5M5.5 18.5 4 20"/>',
+ moon:'<path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.7 8.7 0 1 0 10.7 10.7z"/>',
  school:'<path d="M3 21V8l9-5 9 5v13M2 21h20M7 11h2m6 0h2m-10 4h2m6 0h2M10 21v-5h4v5"/>',
  filter:'<path d="M4 5h16l-6.5 8v6l-3 2v-8z"/>',
  tag:'<path d="M20 13 12 21 3 12V3h9zM7.5 7.5h.01"/>',
@@ -372,8 +390,8 @@ const UI_GLYPHS = {
 function uiIcon(name, size=19) { const p=UI_GLYPHS[name]||UI_GLYPHS.grid;return `<svg class="ui-icon" aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`; }
 function icon(name){return uiIcon(name);}
 
-function cleanupTransientUi(){closeContextMenu?.();qs("#filter-mobile-shade")?.remove();qsa("body > .filter-drawer").forEach(el=>el.remove());document.body.classList.remove("filter-sheet-open","mobile-overlay-open","mobile-sidebar-open");}
-function renderPendingApproval(){app.innerHTML=`<main class="pending-access"><div class="pending-card"><div class="brandmark">E</div><span class="eyebrow">Equipa</span><h1>Acesso indisponível</h1><p>Esta conta está aguardando aprovação, suspensa ou teve o acesso removido pela administração da escola. Nenhum inventário ou histórico fica disponível enquanto o acesso não estiver liberado.</p><button class="button primary" id="pending-signout" type="button">Sair da conta</button></div><footer class="equipa-watermark standalone">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer></main>`;qs("#pending-signout")?.addEventListener("click",()=>supabase.auth.signOut());}
+function cleanupTransientUi(){closeContextMenu?.();qs("#filter-mobile-shade")?.remove();closeEquipaNotifications();qsa("body > .filter-drawer").forEach(el=>el.remove());document.body.classList.remove("filter-sheet-open","mobile-overlay-open","mobile-sidebar-open");}
+function renderPendingApproval(){app.innerHTML=`<main class="pending-access"><div class="pending-card"><span class="eyebrow">Equipa</span><h1>Acesso indisponível</h1><p>Esta conta está aguardando aprovação, suspensa ou teve o acesso removido pela administração da escola. Nenhum inventário ou histórico fica disponível enquanto o acesso não estiver liberado.</p><button class="button primary" id="pending-signout" type="button">Sair da conta</button></div><footer class="equipa-watermark standalone">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer></main>`;qs("#pending-signout")?.addEventListener("click",()=>supabase.auth.signOut());}
 let equipaShellAbort=new AbortController();
 function shell(content) {
   equipaShellAbort.abort();
@@ -383,7 +401,7 @@ function shell(content) {
   const mobileMoreItems = `${nav("reservations","Reservas")}${nav("history","Histórico")}${nav("carts","Carrinhos")}${admin ? nav("maintenance","Manutenção") + nav("reports","Relatórios") + nav("audit","Auditoria") + nav("admin","Administração") : ""}`;
   app.innerHTML = `<div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand" title="Equipa"><div class="brandmark small">E</div><div class="brand-copy"><strong>Equipa</strong><span>Gestão escolar</span></div></div>
+      <div class="sidebar-brand" title="Equipa"><div class="brand-copy"><strong>Equipa</strong><span>Gestão escolar</span></div></div>
       <nav class="nav" aria-label="Navegação principal">
         ${nav("dashboard","Início")}${nav("equipment","Equipamentos")}${nav("withdrawals","Retiradas")}${nav("reservations","Reservas")}${nav("history","Histórico")}${nav("carts","Carrinhos")}${admin ? nav("maintenance","Manutenção") + nav("reports","Relatórios") + nav("audit","Auditoria") + nav("admin","Administração") : ""}
       </nav>
@@ -394,7 +412,7 @@ function shell(content) {
       <header class="topbar">
         <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">☰</button><div class="mobile-top-name"><span class="topbar-kicker">Equipa</span><strong>${esc(pageTitle())}</strong></div></div>
         <form class="global-search" id="global-search-form" role="search">${uiIcon("search",18)}<input id="global-search" type="search" value="${esc(currentGlobalSearchValue())}" placeholder="Pesquisar equipamento, turma, aluno ou manutenção..." autocomplete="off"><kbd>Ctrl K</kbd></form>
-        <div class="topbar-right"><button type="button" class="topbar-tool" id="topbar-alerts" aria-label="Ver pendências">${uiIcon("bell",21)}<i></i></button><button type="button" class="topbar-tool" id="topbar-theme" aria-label="Alternar tema">${uiIcon("sun",21)}</button><div class="topbar-divider"></div><div class="school-identification"><span>${uiIcon("school",23)}</span><div><strong>E.E. Amador e Catharina</strong><small>Equipa · Gestão escolar</small></div></div></div>
+        <div class="topbar-right"><button type="button" class="topbar-tool" id="topbar-alerts" aria-label="Abrir notificações" aria-haspopup="dialog" aria-expanded="false">${uiIcon("bell",21)}<i hidden></i></button><button type="button" class="topbar-tool" id="topbar-theme" aria-label="Alternar tema">${uiIcon(document.documentElement.dataset.theme === "dark" ? "moon" : "sun",21)}</button><div class="topbar-divider"></div><div class="school-identification"><span>${uiIcon("school",23)}</span><div><strong>E.E. Amador e Catharina</strong><small>Equipa · Gestão escolar</small></div></div></div>
       </header>
       <main class="content view-${esc(state.view)}">${content}</main><footer class="equipa-watermark">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer>
     </section>
@@ -414,8 +432,10 @@ function shell(content) {
   qs("#logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-sheet-logout")?.addEventListener("click", () => supabase.auth.signOut());
   qs("#mobile-qr-scan")?.addEventListener("click", openMobileQrScanner);
-  qs("#topbar-alerts")?.addEventListener("click",()=>{state.withdrawalsStatus="overdue";navigate("withdrawals")});
-  qs("#topbar-theme")?.addEventListener("click",()=>document.documentElement.classList.toggle("equipa-dim"));
+  qs("#topbar-alerts")?.addEventListener("click",toggleEquipaNotifications);
+  qs("#topbar-theme")?.addEventListener("click",()=>setEquipaTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+  qs("#topbar-theme")?.setAttribute("aria-pressed",String(document.documentElement.dataset.theme === "dark"));
+  refreshEquipaNotificationBadge().catch(()=>{});
   const closeMobileMore = () => {qs("#mobile-more-backdrop")?.classList.remove("open");document.body.classList.remove("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","false")};
   qs("#mobile-more")?.addEventListener("click", () => {qs("#mobile-more-backdrop")?.classList.add("open");document.body.classList.add("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","true")});
   qs("#mobile-more-close")?.addEventListener("click", closeMobileMore);
@@ -433,6 +453,88 @@ function shell(content) {
     runSmartGlobalSearch(term);
   });
 }
+// Avisos operacionais do banco, sem misturar estado de filtros com a central de notificações.
+let equipaNoticeCache = {at:0, items:[]};
+let equipaNoticePromise = null;
+let equipaNoticeAbort = null;
+async function getEquipaNotices(force=false) {
+  if (!force && Date.now()-equipaNoticeCache.at<45000) return equipaNoticeCache.items;
+  if (equipaNoticePromise) return equipaNoticePromise;
+  equipaNoticePromise = (async()=>{
+    const now = new Date();
+    const soon = new Date(now.getTime()+24*3600000).toISOString();
+    const tasks = [
+      {kind:"withdrawals",name:"Devolução atrasada",description:"Retirada com prazo de devolução vencido",go:"withdrawals",query:()=>supabase.from("withdrawals").select("id,class_name,destination,due_at").eq("status","open").lt("due_at",now.toISOString()).order("due_at").limit(8)},
+      {kind:"reservations",name:"Reserva próxima",description:"Agendamento para as próximas 24 horas",go:"reservations",query:()=>supabase.from("reservations").select("id,class_name,destination,start_at").eq("status","confirmed").gte("start_at",now.toISOString()).lte("start_at",soon).order("start_at").limit(8)}
+    ];
+    if(state.profile?.role === "admin") tasks.push({kind:"maintenance",name:"Manutenção aberta",description:"Aguardando conferência técnica",go:"maintenance",query:()=>supabase.from("maintenance_events").select("id,title,opened_at").eq("status","open").order("opened_at",{ascending:false}).limit(8)});
+    const replies=await Promise.all(tasks.map(x=>Promise.resolve().then(x.query).catch(error=>({data:[],error}))));
+    const items=[];const failures=[];
+    replies.forEach((reply,index)=>{
+      const item=tasks[index];
+      if(reply?.error){failures.push(item.name);return;}
+      for(const r of reply?.data||[]) {
+        const description=item.kind==="withdrawals" ? `${r.class_name||"Turma não informada"} · ${r.destination||"Sem destino"} · prazo ${dt(r.due_at)}` : item.kind==="reservations" ? `${r.class_name||"Turma não informada"} · ${r.destination||"Sem destino"} · ${dt(r.start_at)}` : `${r.title||"Equipamento em manutenção"} · ${dt(r.opened_at)}`;
+        items.push({kind:item.kind,name:item.name,description,go:item.go});
+      }
+    });
+    equipaNoticeCache={at:Date.now(),items,failures};
+    return items;
+  })().finally(()=>{equipaNoticePromise=null});
+  return equipaNoticePromise;
+}
+async function refreshEquipaNotificationBadge(){
+  if(!state.session) return;
+  const items=await getEquipaNotices();
+  const badge=qs("#topbar-alerts i");
+  if(badge) badge.hidden = items.length === 0;
+}
+function closeEquipaNotifications(){
+  equipaNoticeAbort?.abort();equipaNoticeAbort=null;
+  qs("#equipa-notification-panel")?.remove();
+  qs("#topbar-alerts")?.setAttribute("aria-expanded","false");
+}
+async function toggleEquipaNotifications(){
+  if(qs("#equipa-notification-panel")) {closeEquipaNotifications();return;}
+  const button=qs("#topbar-alerts");if(!button)return;
+  const notificationAbort = new AbortController();equipaNoticeAbort = notificationAbort;
+  const panel=document.createElement("section");
+  panel.id="equipa-notification-panel";panel.className="equipa-notification-panel";
+  panel.setAttribute("role","dialog");panel.setAttribute("aria-label","Notificações do Equipa");
+  panel.innerHTML=`<div class="equipa-notification-head"><div><strong>Notificações</strong><span>Informações atuais da escola</span></div><button type="button" class="equipa-notice-close" aria-label="Fechar notificações">×</button></div><div class="equipa-notification-list" id="equipa-notice-list"><p class="equipa-notice-empty">Consultando avisos…</p></div><div class="equipa-notice-foot"><button type="button" id="equipa-notice-refresh">Atualizar avisos</button></div>`;
+  document.body.append(panel);button.setAttribute("aria-expanded","true");
+  const position=()=>{
+    const b=qs("#topbar-alerts")?.getBoundingClientRect();
+    if(!b || !panel.isConnected)return;
+    panel.style.top=`${Math.max(8,b.bottom+8)}px`;
+    panel.style.left=`${Math.max(8,Math.min(innerWidth-panel.offsetWidth-8,b.right-panel.offsetWidth))}px`;
+  };
+  position();
+  const paint=async(force=false)=>{
+    const list=qs("#equipa-notice-list",panel);if(!list)return;
+    list.innerHTML='<p class="equipa-notice-empty">Consultando avisos…</p>';
+    try {
+      const items=await getEquipaNotices(force);
+      if(!panel.isConnected)return;
+      const failed=equipaNoticeCache.failures||[];
+      list.innerHTML=`${failed.length?'<p class="equipa-notice-warning">Alguns avisos não puderam ser consultados. Tente atualizar.</p>':''}${items.length?items.map((x,index)=>`<button class="equipa-notice-item" type="button" data-notice-index="${index}"><strong>${esc(x.name)}</strong><span>${esc(x.description)}</span><small>Abrir ${esc(x.go==="withdrawals"?"Retiradas":x.go==="reservations"?"Reservas":"Manutenção")}</small></button>`).join(''):'<p class="equipa-notice-empty">Nenhum aviso operacional no momento.</p>'}`;
+      list.querySelectorAll("[data-notice-index]").forEach(el=>el.addEventListener("click",()=>{
+        const notice=items[Number(el.dataset.noticeIndex)];if(!notice)return;
+        closeEquipaNotifications();navigate(notice.go);
+      }));
+      const badge=qs("#topbar-alerts i");if(badge)badge.hidden=items.length===0;
+    }catch(error){if(panel.isConnected)list.innerHTML=`<p class="equipa-notice-warning">Não foi possível consultar os avisos. ${esc(errText(error))}</p>`;}
+  };
+  qs(".equipa-notice-close",panel)?.addEventListener("click",closeEquipaNotifications);
+  qs("#equipa-notice-refresh",panel)?.addEventListener("click",()=>paint(true));
+  document.addEventListener("pointerdown",event=>{
+    if(!panel.contains(event.target) && !button.contains(event.target))closeEquipaNotifications();
+  },{signal:notificationAbort.signal});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape")closeEquipaNotifications();},{signal:notificationAbort.signal});
+  window.addEventListener("resize",position,{signal:notificationAbort.signal});
+  await paint();
+}
+
 function nav(view, label) { return `<button type="button" class="nav-button ${state.view === view ? "active" : ""}" data-view="${view}" title="${esc(label)}" aria-label="${esc(label)}"><span class="nav-symbol">${uiIcon(view,20)}</span><span class="nav-label">${esc(label)}</span></button>`; }
 function mobileNav(view,label){return `<button type="button" class="mobile-nav-item ${state.view===view?"active":""}" data-view="${view}">${uiIcon(view,19)}<small>${esc(label)}</small></button>`;}
 async function navigate(view) {
@@ -477,7 +579,7 @@ async function renderDashboard() {
 
   const recentMobile = (current || []).slice(0,4);
   shell(`<section class="equipa-ref-home desktop-dashboard">
-    <header class="ref-welcome"><div class="ref-welcome-main"><span class="ref-breadcrumb">Início</span><div class="ref-welcome-title"><span aria-hidden="true" class="ref-wave">👋</span><div><h1>Olá, ${esc(state.profile?.full_name||firstName())}</h1><p>Aqui está o resumo da gestão de equipamentos da escola.</p></div></div></div><div class="ref-welcome-date"><strong>${esc(new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date()))}</strong><span>“Organização hoje, uma escola melhor amanhã.”</span></div></header>
+    <header class="ref-welcome"><div class="ref-welcome-main"><span class="ref-breadcrumb">Início</span><div class="ref-welcome-title"><span aria-hidden="true" class="ref-wave">👋</span><div><h1>Olá, ${esc(state.profile?.full_name||firstName())}</h1><p>Aqui está o resumo da gestão de equipamentos da escola.</p></div></div></div><div class="ref-welcome-date"><strong>${esc(new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date()))}</strong></div></header>
     <section class="ref-kpi-grid" aria-label="Indicadores da escola">
       <button class="ref-kpi ref-kpi-green" data-go="equipment" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("equipment",23)}</span><span class="ref-kpi-change">↗ ${availablePct}%</span></div><strong class="ref-kpi-number">${Number(available).toLocaleString("pt-BR")}</strong><b>Disponíveis</b><small>${availablePct}% do inventário</small></button>
       <button class="ref-kpi ref-kpi-blue" data-go="withdrawals" type="button"><div class="ref-kpi-head"><span class="ref-kpi-icon">${uiIcon("carts",23)}</span><span class="ref-kpi-change">${pendingReturns} pendente(s)</span></div><strong class="ref-kpi-number">${Number(inUse).toLocaleString("pt-BR")}</strong><b>Em uso</b><small>Equipamentos atualmente retirados</small></button>
@@ -928,19 +1030,21 @@ async function openWithdrawalDetail(withdrawalId) {
 async function renderReservations() {
   state.view = "reservations";
   shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Agenda</span><h2>Reservas</h2><p>Solicite equipamentos por quantidade, confira datas e faça o check-in antes da retirada.</p></div><button class="button primary" id="new-quantity-booking">Nova reserva</button></div>
-    <div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="booking-search" class="search" placeholder="Buscar turma, equipamento ou destino" value="${esc(state.bookingSearch)}"><select class="booking-status-filter" id="booking-status"><option value="">Todas as situações</option><option value="confirmed" ${state.reservationsStatus==='confirmed'?'selected':''}>Confirmadas</option><option value="fulfilled" ${state.reservationsStatus==='fulfilled'?'selected':''}>Retiradas</option><option value="cancelled" ${state.reservationsStatus==='cancelled'?'selected':''}>Canceladas</option><option value="expired" ${state.reservationsStatus==='expired'?'selected':''}>Expiradas</option></select></div></div>
+    <div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="booking-search" class="search" placeholder="Buscar turma, equipamento ou destino" value="${esc(state.bookingSearch)}"><button type="button" class="filter-button ${state.reservationsStatus?'active':''}" id="booking-filter-toggle" aria-expanded="false">${uiIcon("filter",17)} Filtros ${filterBadge(activeFilterCount([state.reservationsStatus]))}</button></div></div><div class="filter-drawer booking-filter-panel" id="booking-filter-panel"><div class="filter-grid"><label>Situação<select class="booking-status-filter" id="booking-status"><option value="">Todas as situações</option><option value="confirmed" ${state.reservationsStatus==='confirmed'?'selected':''}>Confirmadas</option><option value="fulfilled" ${state.reservationsStatus==='fulfilled'?'selected':''}>Retiradas</option><option value="cancelled" ${state.reservationsStatus==='cancelled'?'selected':''}>Canceladas</option><option value="expired" ${state.reservationsStatus==='expired'?'selected':''}>Expiradas</option></select></label></div><div class="filter-actions"><button type="button" class="button small ghost" id="booking-filter-clear">Limpar</button><button type="button" class="button primary small" id="booking-filter-apply">Aplicar filtros</button></div></div>
     <div id="reservations"><div class="loading">Carregando agenda…</div></div></section>`);
   qs("#new-quantity-booking")?.addEventListener("click", () => openQuantityReservation());
   let debounce;
   qs("#booking-search")?.addEventListener("input", e => { clearTimeout(debounce); debounce = setTimeout(() => { state.bookingSearch = e.target.value; loadBookingSummary(); }, 200); });
-  qs("#booking-status")?.addEventListener("change", e => { state.reservationsStatus = e.target.value; loadBookingSummary(); });
+  wireFilterToggle("booking-filter-toggle","booking-filter-panel");
+  qs("#booking-filter-apply")?.addEventListener("click",()=>{state.reservationsStatus=qs("#booking-status")?.value||"";state.bookingPage=0;loadBookingSummary();});
+  qs("#booking-filter-clear")?.addEventListener("click",()=>{state.reservationsStatus="";state.bookingPage=0;loadBookingSummary();});
   await loadBookingSummary();
 }
 async function loadBookingSummary() {
   const host = qs("#reservations"); if (!host) return;
-  await supabase.rpc("equipa_expire_reservations");
+  try { await supabase.rpc("equipa_expire_reservations"); } catch(error){console.warn("Não foi possível atualizar reservas expiradas",error);}
   const { data, error } = await supabase.rpc("equipa_booking_summary", { p_page: state.bookingPage });
-  if (!host) return;
+  if (!host.isConnected) return;
   if (error) { host.innerHTML = `<div class="empty"><strong>Não foi possível abrir a agenda.</strong><span>${esc(errText(error))}</span><button class="button" id="retry-bookings">Tentar novamente</button></div>`;
     qs("#retry-bookings")?.addEventListener("click", loadBookingSummary); return; }
   let rows = data || [];
@@ -1085,77 +1189,78 @@ async function renderReports() {
   qs("#report-export")?.addEventListener("click",exportCurrentReport);
   await loadReports();
 }
+let equipaReportRequest=0;
 async function loadReports() {
   const host=qs("#report-results");if(!host)return;
-  const start=qs("#report-from")?.value;const finish=qs("#report-to")?.value;
+  const request=++equipaReportRequest;
+  const start=qs("#report-from")?.value;
+  const finish=qs("#report-to")?.value;
   const className=(qs("#report-class")?.value||"").trim().toLowerCase();
-  const groupFilter=qs("#report-group")?.value||"";
-  const statusFilter=qs("#report-status")?.value||"";
-  if(!start||!finish||start>finish) return notify("Confira o intervalo do relatório.","warning");
+  const group=qs("#report-group")?.value||"";
+  const status=qs("#report-status")?.value||"";
+  const button=qs("#report-apply");
+  const setMessage=(title,msg)=>{if(host.isConnected&&request===equipaReportRequest)host.innerHTML=`<div class="empty report-error"><strong>${esc(title)}</strong><span>${esc(msg)}</span><button class="button" id="retry-reports" type="button">Tentar novamente</button></div>`;qs("#retry-reports")?.addEventListener("click",loadReports);};
+  if(!start||!finish||start>finish){setMessage("Período inválido","Confira as datas de início e fim.");return;}
   const startDate=new Date(start+"T00:00:00");
   const endDate=new Date(finish+"T00:00:00");endDate.setDate(endDate.getDate()+1);
-  const [{data,error},{data:equipmentRows,error:eqError},{data:withdrawRows,error:wdError},{data:reservationRows,error:rsError},{data:maintenanceRows,error:mtError}] = await Promise.all([
-    supabase.rpc("equipa_admin_reports",{p_from:startDate.toISOString(),p_to:endDate.toISOString()}),
-    supabase.from("equipments").select("id,code,model,school_group,status,is_active").order("code"),
-    supabase.from("withdrawals").select("id,class_name,withdrawn_at,due_at,status").gte("withdrawn_at",startDate.toISOString()).lt("withdrawn_at",endDate.toISOString()).order("withdrawn_at"),
-    supabase.from("reservations").select("id,class_name,start_at,status,quantity").gte("start_at",startDate.toISOString()).lt("start_at",endDate.toISOString()).order("start_at"),
-    supabase.from("maintenance_events").select("id,status,opened_at").or(`opened_at.gte.${startDate.toISOString()},closed_at.gte.${startDate.toISOString()}`)
-  ]);
-  if(error||eqError||wdError||rsError||mtError){host.innerHTML=`<div class="empty"><strong>Não foi possível calcular o relatório.</strong><span>${esc(errText(error||eqError||wdError||rsError||mtError))}</span></div>`;return;}
-  let equipments=(equipmentRows||[]).filter(x=>x.is_active!==false);
-  if(groupFilter) equipments=equipments.filter(x=>x.school_group===groupFilter);
-  if(statusFilter) equipments=equipments.filter(x=>x.status===statusFilter);
-  const statusCounts={available:0,in_use:0,maintenance:0,unavailable:0};
-  equipments.forEach(x=>{statusCounts[x.status] = (statusCounts[x.status]||0)+1});
-  const totalEquip=Math.max(1,equipments.length);
-  let withdrawals=(withdrawRows||[]);
-  let reservations=(reservationRows||[]);
-  if(className){
-    withdrawals=withdrawals.filter(x=>String(x.class_name||"").toLowerCase().includes(className));
-    reservations=reservations.filter(x=>String(x.class_name||"").toLowerCase().includes(className));
-  }
-  const totalActsByDay = {};
-  const addDay=(key)=>{totalActsByDay[key]=(totalActsByDay[key]||0)+1};
-  withdrawals.forEach(w=>addDay((w.withdrawn_at||"").slice(0,10)));
-  reservations.forEach(r=>addDay((r.start_at||"").slice(0,10)));
-  const days=[]; const cursor=new Date(startDate);
-  while(cursor<endDate){days.push(cursor.toISOString().slice(0,10));cursor.setDate(cursor.getDate()+1)}
-  const maxDay=Math.max(1,...days.map(d=>totalActsByDay[d]||0));
-  const top=(data?.top_equipment||[]).slice(0,5);
-  const avgMinutes=Number(data?.avg_minutes||0);
-  host.innerHTML=`<div class="report-dashboard-grid">
-      <section class="report-card report-usage-card">
-        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("equipment",20)}</span><div><h3>Uso dos equipamentos</h3><p>Distribuição atual do inventário</p></div></div>
-        <div class="report-usage-body">
-          <div class="report-donut" style="--p1:${(statusCounts.in_use/totalEquip)*100}%;--p2:${((statusCounts.in_use+statusCounts.available)/totalEquip)*100}%;--p3:${((statusCounts.in_use+statusCounts.available+statusCounts.unavailable)/totalEquip)*100}%"><div class="report-donut-center"><strong>${equipments.length}</strong><span>total</span></div></div>
-          <div class="report-legend">
-            <div><i class="legend-green"></i><span>Em uso</span><b>${statusCounts.in_use}</b><small>${Math.round((statusCounts.in_use/totalEquip)*100)}%</small></div>
-            <div><i class="legend-blue"></i><span>Disponíveis</span><b>${statusCounts.available}</b><small>${Math.round((statusCounts.available/totalEquip)*100)}%</small></div>
-            <div><i class="legend-slate"></i><span>Indisponíveis</span><b>${statusCounts.unavailable}</b><small>${Math.round((statusCounts.unavailable/totalEquip)*100)}%</small></div>
-          </div>
-        </div>
-      </section>
-      <section class="report-card report-maint-card">
-        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("maintenance",20)}</span><div><h3>Manutenções</h3><p>Pendências técnicas ativas</p></div></div>
-        <div class="report-center-metric"><strong>${Number(data?.maintenance_open||0)}</strong><span>manutenções abertas</span></div>
-        <button class="report-inline-action" type="button" data-go-report-maint>Ver manutenções ${uiIcon("arrow",17)}</button>
-      </section>
-      <section class="report-card report-time-card">
-        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("history",20)}</span><div><h3>Tempo médio de uso</h3><p>Baseado nas retiradas finalizadas</p></div></div>
-        <div class="report-center-metric"><strong>${avgMinutes?`${Math.round(avgMinutes)} min`:'—'}</strong><span>por retirada</span></div>
-        <div class="report-note">Baseado nas retiradas finalizadas no período selecionado.</div>
-      </section>
-      <section class="report-card report-table-card">
-        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("reports",20)}</span><div><h3>Equipamentos mais utilizados</h3><p>Lista dos equipamentos com mais retiradas no período.</p></div></div>
-        <div class="report-table-wrap"><table class="report-table"><thead><tr><th>#</th><th>Equipamento</th><th>Modelo</th><th>Quantidade</th><th>Tempo total</th></tr></thead><tbody>${top.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code||'—')}</td><td>${esc(x.model||'Não informado')}</td><td>${Number(x.uses||0)}</td><td>${Number(x.minutes||0)?`${Number(x.minutes)} min`:'—'}</td></tr>`).join('')||'<tr><td colspan="5" class="report-empty-cell">Sem movimentações no período.</td></tr>'}</tbody></table></div>
-      </section>
-      <section class="report-card report-chart-card">
-        <div class="report-card-head"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><h3>Atividades por dia</h3><p>Quantidade de retiradas e reservas por dia.</p></div></div>
-        <div class="report-bars">${days.map(day=>{const value=totalActsByDay[day]||0;const h=Math.max(8,Math.round((value/maxDay)*100));return `<div class="report-bar-col"><div class="report-bar-track"><div class="report-bar-fill" style="height:${h}%"></div></div><span>${day.slice(8,10)}/${day.slice(5,7)}</span></div>`}).join('')}</div>
-      </section>
-    </div>`;
-  qs("[data-go-report-maint]")?.addEventListener("click",()=>navigate("maintenance"));
+  if((endDate-startDate)/86400000>370){setMessage("Período muito longo","Selecione até 370 dias.");return;}
+  host.innerHTML='<div class="loading" role="status">Atualizando relatório…</div>';
+  if(button)button.disabled=true;
+  try {
+    // A consolidação histórica vem do RPC. Nenhuma coluna fictícia e nenhum select *.
+    const summaryPromise=supabase.rpc("equipa_admin_reports",{p_from:startDate.toISOString(),p_to:endDate.toISOString()});
+    const countFor=stat=>{
+      if(status && stat!==status) return Promise.resolve({count:0,error:null});
+      let query=supabase.from("equipments").select("id",{count:"exact",head:true}).eq("is_active",true).eq("status",stat);
+      if(group)query=query.eq("school_group",group);
+      return query;
+    };
+    const baseCount=()=>{
+      let query=supabase.from("equipments").select("id",{count:"exact",head:true}).eq("is_active",true);
+      if(group)query=query.eq("school_group",group);
+      if(status)query=query.eq("status",status);
+      return query;
+    };
+    const settle=async promise=>{try{return await promise;}catch(error){return {data:null,error};}};
+    const [report,totalResult,availableResult,inUseResult,maintResult,unavailableResult] = await Promise.all([
+      settle(summaryPromise),settle(baseCount()),settle(countFor("available")),settle(countFor("in_use")),settle(countFor("maintenance")),settle(countFor("unavailable"))
+    ]);
+    if(report.error)throw report.error;
+    if(!report.data)throw new Error("O servidor não retornou indicadores para este período.");
+    for(const query of [totalResult,availableResult,inUseResult,maintResult,unavailableResult])if(query.error)throw query.error;
+    if(!host.isConnected||request!==equipaReportRequest)return;
+    const totals={available:Number(availableResult.count||0),in_use:Number(inUseResult.count||0),maintenance:Number(maintResult.count||0),unavailable:Number(unavailableResult.count||0)};
+    const total=Number(totalResult.count||0);
+    // Limite explícito para não despejar todos os registros da escola no navegador.
+    const chartDays=Math.min(60,Math.round((endDate-startDate)/86400000));
+    const chartStart=new Date(endDate.getTime()-chartDays*86400000);
+    let activities=[];let chartError=false;
+    const [loans,bookings]=await Promise.all([
+      settle(supabase.from("withdrawals").select("id,class_name,withdrawn_at").gte("withdrawn_at",chartStart.toISOString()).lt("withdrawn_at",endDate.toISOString()).order("withdrawn_at",{ascending:false}).limit(500)),
+      settle(supabase.from("reservations").select("id,class_name,start_at").gte("start_at",chartStart.toISOString()).lt("start_at",endDate.toISOString()).order("start_at",{ascending:false}).limit(500))
+    ]);
+    if(loans.error||bookings.error)chartError=true;
+    else activities=[...(loans.data||[]).map(x=>({date:x.withdrawn_at,cls:x.class_name})),...(bookings.data||[]).map(x=>({date:x.start_at,cls:x.class_name}))];
+    if(!host.isConnected||request!==equipaReportRequest)return;
+    const byDay=new Map();
+    for(const record of activities){if(className&&!String(record.cls||"").toLowerCase().includes(className))continue;const day=String(record.date||"").slice(0,10);byDay.set(day,(byDay.get(day)||0)+1);}
+    const days=Array.from({length:chartDays},(_,i)=>new Date(chartStart.getTime()+i*86400000).toISOString().slice(0,10));
+    const maxDay=Math.max(1,...byDay.values());
+    const percent=v=>total?Math.round(v*100/total):0;
+    const top=Array.isArray(report.data.top_equipment)?report.data.top_equipment.slice(0,8):[];
+    const avg=report.data.avg_minutes==null?null:Number(report.data.avg_minutes);
+    const note='Indicadores históricos consideram o período; grupo e situação filtram a distribuição atual. Turma filtra apenas o gráfico de atividades.';
+    host.innerHTML=`<p class="report-scope-note">${esc(note)} ${chartError?'Não foi possível consultar o gráfico de atividades.':''}</p><div class="report-dashboard-grid">
+      <section class="report-card report-usage-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("equipment",20)}</span><div><h3>Uso dos equipamentos</h3><p>Distribuição atual do inventário</p></div></div><div class="report-usage-body"><div class="report-donut" style="--p1:${percent(totals.in_use)}%;--p2:${percent(totals.in_use+totals.available)}%;--p3:${percent(totals.in_use+totals.available+totals.unavailable)}%"><div class="report-donut-center"><strong>${total}</strong><span>total</span></div></div><div class="report-legend"><div><i class="legend-green"></i><span>Em uso</span><b>${totals.in_use}</b><small>${percent(totals.in_use)}%</small></div><div><i class="legend-blue"></i><span>Disponíveis</span><b>${totals.available}</b><small>${percent(totals.available)}%</small></div><div><i class="legend-slate"></i><span>Indisponíveis</span><b>${totals.unavailable+totals.maintenance}</b><small>${percent(totals.unavailable+totals.maintenance)}%</small></div></div></div></section>
+      <section class="report-card report-maint-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("maintenance",20)}</span><div><h3>Manutenções</h3><p>Pendências técnicas atuais</p></div></div><div class="report-center-metric"><strong>${Number(report.data.maintenance_open||0)}</strong><span>manutenções abertas</span></div><button class="report-inline-action" type="button" data-go-report-maint>Ver manutenções ${uiIcon("arrow",17)}</button></section>
+      <section class="report-card report-time-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("history",20)}</span><div><h3>Tempo médio de uso</h3><p>Retiradas finalizadas no período</p></div></div><div class="report-center-metric"><strong>${Number.isFinite(avg)&&avg!==null?`${Math.round(avg)} min`:'—'}</strong><span>por equipamento devolvido</span></div><div class="report-note">Calculado com as devoluções registradas no período.</div></section>
+      <section class="report-card report-table-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("reports",20)}</span><div><h3>Equipamentos mais utilizados</h3><p>Retiradas registradas no período</p></div></div><div class="report-table-wrap"><table class="report-table"><thead><tr><th>#</th><th>Equipamento</th><th>Retiradas</th></tr></thead><tbody>${top.length?top.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.code||"Não informado")}</td><td>${Number(x.uses||0)}</td></tr>`).join(""):'<tr><td colspan="3" class="report-empty-cell">Sem movimentações no período.</td></tr>'}</tbody></table></div></section>
+      <section class="report-card report-chart-card"><div class="report-card-head"><span class="report-mini-icon">${uiIcon("calendar",20)}</span><div><h3>Atividades por dia</h3><p>Retiradas e reservas · últimos ${chartDays} dias do intervalo</p></div></div><div class="report-bars">${days.map(day=>{const n=byDay.get(day)||0;return `<div class="report-bar-col"><div class="report-bar-track"><div class="report-bar-fill" style="height:${n?Math.max(6,Math.round(n/maxDay*100)):0}%"></div></div><span>${day.slice(8,10)}/${day.slice(5,7)}</span></div>`}).join("")}</div><p class="report-chart-note">${chartError?'Gráfico temporariamente indisponível.':'Até 500 eventos por tipo consultados para visualização.'}</p></section></div>`;
+    qs("[data-go-report-maint]")?.addEventListener("click",()=>navigate("maintenance"));
+  }catch(error){console.warn("Falha ao carregar relatórios:",error);setMessage("Relatório indisponível",errText(error));}
+  finally{if(button?.isConnected && request===equipaReportRequest)button.disabled=false;}
 }
+
 async function exportCurrentReport(){
   const start=qs("#report-from")?.value||new Date().toISOString().slice(0,10);
   const finish=qs("#report-to")?.value||start;

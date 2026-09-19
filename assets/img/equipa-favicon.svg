@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Equipa">
+  <rect width="64" height="64" rx="16" fill="#17263e"/>
+  <path d="M18 14h29v8H27v8h18v8H27v7h20v8H18z" fill="#ffffff"/>
+  <path d="M17 55h31" stroke="#70a5ff" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -218,6 +218,10 @@ class QueryBuilder {
   update(value) { this.method = "PATCH"; this.body = value; return this; }
   delete() { this.method = "DELETE"; return this; }
   eq(column, value) { this.filters.push([column, `eq.${formatFilterValue(value)}`]); return this; }
+  gt(column, value) { this.filters.push([column, `gt.${formatFilterValue(value)}`]); return this; }
+  gte(column, value) { this.filters.push([column, `gte.${formatFilterValue(value)}`]); return this; }
+  lt(column, value) { this.filters.push([column, `lt.${formatFilterValue(value)}`]); return this; }
+  lte(column, value) { this.filters.push([column, `lte.${formatFilterValue(value)}`]); return this; }
   or(expression) { this.filters.push(["or", `(${String(expression)})`]); return this; }
   in(column, values) {
     const encoded = (values || []).map(v => `"${String(v).replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`).join(",");
