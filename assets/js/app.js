@@ -131,7 +131,8 @@ function errText(error) {
     DASEIN_MAINTENANCE_ALREADY_OPEN: "Já existe uma manutenção aberta para este equipamento.", DASEIN_EQUIPMENT_IN_USE: "Devolva o equipamento antes de colocá-lo em manutenção.",
     EQUIPA_ACCOUNT_DISABLED: "Esta conta está aguardando aprovação ou teve o acesso removido.", EQUIPA_LEGAL_VERSION_INVALID: "Versão dos documentos legais inválida.",
     EQUIPA_RETURN_BEFORE_DELETE: "Registre a devolução antes de apagar o equipamento.", EQUIPA_CLOSE_MAINTENANCE_FIRST: "Conclua a manutenção antes de apagar o equipamento.",
-    EQUIPA_DUE_DATE_INVALID: "Escolha um prazo de devolução entre 5 minutos e 30 dias a partir de agora.",
+    EQUIPA_DUE_DATE_INVALID: "Escolha um prazo posterior ao atual e de até 30 dias.",
+    EQUIPA_DUE_AFTER_SCHOOL_CLOSE: "A devolução deve ser prevista até 21h15, no horário da escola.",
     EQUIPA_RESERVATION_CONFLICT: "Há uma reserva confirmada durante o período desta retirada. Ajuste o prazo ou utilize a reserva existente.",
     EQUIPA_BATCH_SIZE_INVALID: "Selecione de 1 a 60 equipamentos.",
     EQUIPA_CUSTODY_INVALID: "Informe quem receberá o equipamento e o vínculo com a escola.",
@@ -198,6 +199,11 @@ function makeModal(html, wide = false) {
   const back = document.createElement("div");
   back.className = "modal-backdrop";
   back.innerHTML = `<section class="modal ${wide ? "wide" : ""}" role="dialog" aria-modal="true">${html}</section>`;
+  qsa('.panel-head > [data-close],.ref-modal-top > [data-close],.modal-head > [data-close]',back).forEach(el=>el.remove());
+  const closeButton=document.createElement('button');
+  closeButton.type='button';closeButton.className='modal-close-control';closeButton.dataset.close='';
+  closeButton.setAttribute('aria-label','Fechar janela');closeButton.title='Fechar janela';
+  closeButton.textContent='×';qs('.modal',back).prepend(closeButton);
   document.body.append(back);
   qsa("[data-close]", back).forEach(b => b.addEventListener("click", () => closeModal(back)));
   back.addEventListener("click", e => { if (e.target === back) closeModal(back); });
@@ -484,15 +490,45 @@ function shell(content) {
   });
 }
 // Avisos operacionais do banco, sem misturar estado de filtros com a central de notificações.
+let schoolActivityCache={at:0,viewer:null,data:null,pending:null};
+async function getSchoolActivity(force=false){
+ const viewer=state.session?.user?.id||null;
+ if(!viewer)return {events:[],occupancy:[]};
+ if(schoolActivityCache.viewer!==viewer)schoolActivityCache={at:0,viewer,data:null,pending:null};
+ if(!force&&schoolActivityCache.data&&Date.now()-schoolActivityCache.at<20000)return schoolActivityCache.data;
+ if(schoolActivityCache.pending)return schoolActivityCache.pending;
+ schoolActivityCache.pending=(async()=>{
+   const {data,error}=await supabase.rpc('equipa_school_activity',{p_limit:30});
+   if(error)throw error;
+   const safe={events:Array.isArray(data?.events)?data.events:[],occupancy:Array.isArray(data?.occupancy)?data.occupancy:[]};
+   if(schoolActivityCache.viewer===viewer){schoolActivityCache.data=safe;schoolActivityCache.at=Date.now();}
+   return safe;
+ })().finally(()=>{schoolActivityCache.pending=null});
+ return schoolActivityCache.pending;
+}
+function invalidateEquipaActivity(){
+ schoolActivityCache.at=0;equipaNoticeCache.at=0;
+ refreshEquipaNotificationBadge().catch(()=>{});
+}
+function noticeSeenKey(){return `equipa-notices-seen:${state.session?.user?.id||'guest'}`;}
+function recentUnseen(items){
+ let seen=0;try{seen=Number(localStorage.getItem(noticeSeenKey())||0)}catch{}
+ return items.some(x=>x.kind==='activity'&&new Date(x.eventAt).getTime()>seen);
+}
+function markActivityNoticesRead(items){
+ const latest=Math.max(0,...items.filter(x=>x.kind==='activity').map(x=>new Date(x.eventAt).getTime()||0));
+ if(latest)try{localStorage.setItem(noticeSeenKey(),String(latest))}catch{}
+}
 let equipaNoticeCache = {at:0, items:[]};
 let equipaNoticePromise = null;
 let equipaNoticeAbort = null;
 async function getEquipaNotices(force=false) {
-  if (!force && Date.now()-equipaNoticeCache.at<45000) return equipaNoticeCache.items;
+  if (!force && Date.now()-equipaNoticeCache.at<20000) return equipaNoticeCache.items;
   if (equipaNoticePromise) return equipaNoticePromise;
   equipaNoticePromise = (async()=>{
     const now = new Date();
         const tasks = [
+      {kind:'activity',name:'Movimentações',go:'withdrawals',query:()=>getSchoolActivity(force).then(data=>({data:data.events}))},
       {kind:"withdrawals",name:"Devolução atrasada",description:"Retirada com prazo de devolução vencido",go:"withdrawals",query:()=>supabase.from("withdrawals").select("id,class_name,destination,due_at").eq("status","open").lt("due_at",now.toISOString()).order("due_at").limit(8)}
     ];
     if(state.profile?.role === "admin") tasks.push({kind:"maintenance",name:"Manutenção aberta",description:"Aguardando conferência técnica",go:"maintenance",query:()=>supabase.from("maintenance_events").select("id,title,opened_at").eq("status","open").order("opened_at",{ascending:false}).limit(8)});
@@ -502,6 +538,12 @@ async function getEquipaNotices(force=false) {
       const item=tasks[index];
       if(reply?.error){failures.push(item.name);return;}
       for(const r of reply?.data||[]) {
+        if(item.kind==='activity'){
+          items.push({kind:'activity',eventAt:r.event_at,eventId:r.event_id,go:'withdrawals',
+            name:r.event_type==='return'?'Equipamento devolvido':'Equipamento retirado',
+            description:`${r.equipment_code||'Equipamento'} · ${r.event_type==='return'?'Devolução registrada':'Em posse de '+(r.holder_name||'não identificado')}${r.event_type==='checkout'&&r.declared?' (identidade declarada)':''} · ${dt(r.event_at)}`});
+          continue;
+        }
         const description=item.kind==="withdrawals" ? `${r.class_name||"Turma não informada"} · ${r.destination||"Sem destino"} · prazo ${dt(r.due_at)}` : `${r.title||"Equipamento em manutenção"} · ${dt(r.opened_at)}`;
         items.push({kind:item.kind,name:item.name,description,go:item.go});
       }
@@ -515,7 +557,7 @@ async function refreshEquipaNotificationBadge(){
   if(!state.session) return;
   const items=await getEquipaNotices();
   const badge=qs("#topbar-alerts i");
-  if(badge) badge.hidden = items.length === 0;
+  if(badge) badge.hidden = !items.some(x=>x.kind!=='activity')&&!recentUnseen(items);
 }
 function closeEquipaNotifications(){
   equipaNoticeAbort?.abort();equipaNoticeAbort=null;
@@ -550,7 +592,8 @@ async function toggleEquipaNotifications(){
         const notice=items[Number(el.dataset.noticeIndex)];if(!notice)return;
         closeEquipaNotifications();navigate(notice.go);
       }));
-      const badge=qs("#topbar-alerts i");if(badge)badge.hidden=items.length===0;
+      markActivityNoticesRead(items);
+      const badge=qs("#topbar-alerts i");if(badge)badge.hidden=!items.some(x=>x.kind!=='activity');
     }catch(error){if(panel.isConnected)list.innerHTML=`<p class="equipa-notice-warning">Não foi possível consultar os avisos. ${esc(errText(error))}</p>`;}
   };
   qs(".equipa-notice-close",panel)?.addEventListener("click",closeEquipaNotifications);
@@ -758,6 +801,17 @@ function installGlobalContextMenus(){
     }
   },true);
 }
+function bindCommittedSearch(input,onCommit){
+ if(!input)return;
+ let last=String(input.value||''),composing=false;
+ const commit=()=>{if(composing)return;const value=String(input.value||'');if(value===last)return;last=value;onCommit(value)};
+ input.addEventListener('compositionstart',()=>composing=true);
+ input.addEventListener('compositionend',()=>composing=false);
+ input.addEventListener('change',commit);
+ input.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.isComposing){
+   event.preventDefault();commit();input.blur();
+ }});
+}
 function cleanSearch(value) { return String(value || "").replace(/[,%()]/g, " ").trim().slice(0,80); }
 function normalizeSearchText(value = "") {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -797,7 +851,7 @@ function filterBadge(count) { return count ? `<span class="filter-count">${count
 function wireFilterToggle(toggleId, panelId) {
   const btn = qs(`#${toggleId}`); const panel = qs(`#${panelId}`);
   if (!btn || !panel) return;
-  if (!qs(".filter-sheet-head",panel)) panel.insertAdjacentHTML("afterbegin",`<div class="filter-sheet-head"><div><span>Filtros</span><strong>Refine os resultados</strong></div><button type="button" class="filter-sheet-close" aria-label="Fechar">Fechar</button></div>`);
+  if (!qs(".filter-sheet-head",panel)) panel.insertAdjacentHTML("afterbegin",`<div class="filter-sheet-head"><div><span>Filtros</span><strong>Refine os resultados</strong></div><button type="button" class="filter-sheet-close" aria-label="Fechar filtros" title="Fechar filtros">×</button></div>`);
   const marker=document.createComment(`equipa-filter-${panelId}`);
   const restorePanel=()=>{ if(marker.parentNode){ marker.parentNode.insertBefore(panel,marker); marker.remove(); } };
   const removeShade=()=>{const shade=qs("#filter-mobile-shade");shade?.remove();document.body.classList.remove("filter-sheet-open")};
@@ -878,8 +932,8 @@ function bindSmartSearch(input,{onSelect,kind}={}){
   qsa("[data-smart-index]",box).forEach(b=>b.addEventListener("pointerdown",ev=>ev.preventDefault()));
   qsa("[data-smart-index]",box).forEach(b=>b.addEventListener("click",()=>{const entry=matched[Number(b.dataset.smartIndex)]?.x;if(!entry)return;input.value=entry.value;close();input.dispatchEvent(new Event("change",{bubbles:true}));input.dispatchEvent(new Event("input",{bubbles:true}));onSelect?.(entry);}));
  };
- let timer;input.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(show,140)});
- input.addEventListener("focus",show);input.addEventListener("keydown",e=>{if(e.key==="Escape")close();if(e.key==="Enter"&&!box.hidden){const first=box.querySelector("[data-smart-index]");if(first){e.preventDefault();first.click()}}});
+ let timer;input.addEventListener("input",()=>{clearTimeout(timer);timer=setTimeout(show,240)});
+ input.addEventListener("focus",show);input.addEventListener("keydown",e=>{if(e.key==="Escape")close();});
  input.addEventListener("blur",()=>setTimeout(close,110));
 }
 function setupSmartInputs(root=document){
@@ -900,7 +954,40 @@ function setupSmartInputs(root=document){
   }});
  });
 }
+let equipmentSearchGeneration=0;
+async function refreshEquipmentSearch(){
+ const host=qs('#equipment-results'),counter=qs('#equipment-count');if(!host||state.view!=='equipment')return;
+ const generation=++equipmentSearchGeneration;
+ const from=state.equipmentPage*config.pageSize,to=from+config.pageSize-1;
+ let query=supabase.from('equipments').select('id,code,asset_tag,brand,model,label,school_group,serial_number,location_text,notes,status,is_active,created_at,updated_at,qr_token',{count:'exact'});
+ if(state.equipmentFilters.active==='active')query=query.eq('is_active',true);
+ if(state.equipmentFilters.active==='inactive')query=query.eq('is_active',false);
+ if(state.equipmentFilters.status)query=query.eq('status',state.equipmentFilters.status);
+ if(state.equipmentFilters.group)query=query.eq('school_group',state.equipmentFilters.group);
+ if(state.equipmentFilters.location)query=query.ilike('location_text',`*${state.equipmentFilters.location.replace(/[%*,()]/g,' ').trim()}*`);
+ if(state.equipmentFilters.model)query=query.ilike('model',`*${state.equipmentFilters.model.replace(/[%*,()]/g,' ').trim()}*`);
+ const search=cleanSearch(state.equipmentSearch).replace(/[.,()'":;%*\\]/g,' ').trim();
+ if(search)query=query.or(['code','asset_tag','label','brand','model','serial_number','location_text'].map(column=>`${column}.ilike.*${search}*`).join(','));
+ const result=await (state.equipmentSort==='recent'?query.order('updated_at',{ascending:false}):query.order('code')).range(from,to);
+ if(generation!==equipmentSearchGeneration||state.view!=='equipment'||!host.isConnected)return;
+ const rows=result.data||[],count=result.count||0;
+ if(counter)counter.textContent=`${count} equipamento${count===1?' encontrado':'s encontrados'}`;
+ if(result.error){host.innerHTML=`<div class="empty"><strong>Não foi possível buscar.</strong><span>${esc(errText(result.error))}</span></div>`;return;}
+ host.innerHTML=`${equipmentRows(rows)}<div class="pagination"><span>Exibindo ${count===0?0:from+1} a ${Math.min(count,to+1)} de ${count} equipamento${count===1?'':'s'}</span><div><button class="button small" id="prev" ${state.equipmentPage===0?'disabled':''}>‹</button><span class="ref-pagination-current">${state.equipmentPage+1}</span><button class="button small" id="next" ${to+1>=count?'disabled':''}>›</button></div></div>`;
+ bindEquipmentRowClicks(host);
+ qs('#prev',host)?.addEventListener('click',()=>{state.equipmentPage--;refreshEquipmentSearch()});
+ qs('#next',host)?.addEventListener('click',()=>{state.equipmentPage++;refreshEquipmentSearch()});
+ qsa('.equip-row-select',host).forEach(cb=>cb.addEventListener('click',e=>e.stopPropagation()));
+ qsa('[data-item-menu]',host).forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();const row=btn.closest('[data-equipment]');row?.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:btn.getBoundingClientRect().right-8,clientY:btn.getBoundingClientRect().bottom+2}))}));
+ const selectAll=qs('#equip-select-all',host);
+ selectAll?.addEventListener('change',e=>qsa('.equip-row-select',host).forEach(cb=>cb.checked=e.target.checked));
+ const update=()=>{const selected=qsa('.equip-row-select:checked',host),btn=qs('#equipment-label-selected');if(btn){btn.hidden=!selected.length;btn.textContent=`PDF dos selecionados (${selected.length})`}};
+ qsa('.equip-row-select',host).forEach(cb=>cb.addEventListener('change',update));selectAll?.addEventListener('change',update);
+ const oldLabels=qs('#equipment-label-selected');oldLabels?.replaceWith(oldLabels.cloneNode(true));
+ qs('#equipment-label-selected')?.addEventListener('click',()=>{const ids=new Set(qsa('.equip-row-select:checked',host).map(cb=>cb.value));const chosen=rows.filter(row=>ids.has(row.id));if(chosen.length)window.EquipaInventory?.downloadLabels(chosen,'Equipa-etiquetas-selecionadas')},{once:true});
+}
 async function renderEquipment() {
+  ++equipmentSearchGeneration;
   state.view = "equipment";
   const admin = state.profile.role === "admin";
   const from = state.equipmentPage * config.pageSize;
@@ -937,7 +1024,10 @@ async function renderEquipment() {
   qs("#prev")?.addEventListener("click",()=>{state.equipmentPage--;renderEquipment()});
   qs("#next")?.addEventListener("click",()=>{state.equipmentPage++;renderEquipment()});
   let timer;
-  qs("#equipment-search")?.addEventListener("input", e => { clearTimeout(timer); timer=setTimeout(()=>{state.equipmentSearch=e.target.value;state.equipmentPage=0;renderEquipment()},180); });
+  qs("#equipment-search")?.addEventListener("input", e => {
+    clearTimeout(timer);state.equipmentSearch=e.target.value;state.equipmentPage=0;
+    timer=setTimeout(refreshEquipmentSearch,430);
+  });
   if(matchMedia("(min-width:821px)").matches) qs("#equipment-filter-panel")?.classList.add("open");
   wireFilterToggle("equipment-filter-toggle", "equipment-filter-panel");
   const applyRefFilters=()=>{state.equipmentFilters.status=qs("#equipment-status")?.value||"";state.equipmentFilters.active=qs("#equipment-active")?.value||"";state.equipmentFilters.group=qs("#equipment-group")?.value||"";state.equipmentFilters.location=qs("#equipment-location")?.value.trim()||"";state.equipmentFilters.model=qs("#equipment-model-filter")?.value.trim()||"";state.equipmentPage=0;renderEquipment()};
@@ -968,7 +1058,7 @@ async function openEquipment(id) {
   const modal = makeModal(`<div class="panel-head"><div><span class="eyebrow">${esc(e.code)}</span><h2>${esc(e.label || `${e.brand} ${e.model}`)}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><div class="detail-grid">${detail("Estado",statusLabel(e.status))}${detail("Grupo",schoolGroupLabel(e.school_group))}${detail("Patrimônio",e.asset_tag)}${detail("Número de série",e.serial_number)}${detail("Marca",e.brand)}${detail("Modelo",e.model)}${detail("Local",e.location_text)}${detail("Atualizado",dt(e.updated_at))}</div>${e.notes?`<div class="equipment-notes"><span>Observações</span><p>${esc(e.notes)}</p></div>`:""}<div class="modal-actions"><button class="button ghost" data-qr>QR Code</button>${e.status==="available"&&e.is_active?`<button class="button primary" data-checkout>Retirar</button>`:""}${e.status==="in_use"?`<button class="button primary" data-return>Registrar devolução</button>`:""}${admin && !["in_use","maintenance"].includes(e.status)?`<button class="button ghost" data-maintenance>Manutenção</button>`:""}${admin?`<button class="button ghost" data-edit>Editar</button><button class="button danger-solid" data-delete type="button">Apagar</button>`:""}</div></div>`, true);
   qs("[data-qr]",modal)?.addEventListener("click",()=>openQrModal(e.qr_token,e.label||e.code,`${schoolGroupLabel(e.school_group)} · ${e.brand} ${e.model}`));
   qs("[data-checkout]",modal)?.addEventListener("click",()=>{modal.remove();openCheckoutModal([e])});
-  qs("[data-return]",modal)?.addEventListener("click",async()=>{const b=qs("[data-return]",modal);setBusy(b,true,"Registrando…");const {error}=await supabase.rpc("return_equipment",{p_equipment_id:e.id,p_client_action_id:uid()});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Devolução registrada com data e horário.","success");modal.remove();navigate("withdrawals")});
+  qs("[data-return]",modal)?.addEventListener("click",async()=>{const b=qs("[data-return]",modal);setBusy(b,true,"Registrando…");const {error}=await supabase.rpc("return_equipment",{p_equipment_id:e.id,p_client_action_id:uid()});setBusy(b,false);if(error)return notify(errText(error),"error");invalidateEquipaActivity();notify("Devolução registrada com data e horário.","success");modal.remove();navigate("withdrawals")});
   qs("[data-maintenance]",modal)?.addEventListener("click",()=>{modal.remove();openMaintenanceModal(e)});
   qs("[data-edit]",modal)?.addEventListener("click",()=>{modal.remove();openEquipmentForm(e)});
   qs("[data-delete]",modal)?.addEventListener("click",()=>{modal.remove();deleteEquipment(e.id)});
@@ -1028,22 +1118,32 @@ function custodyPayload(form) {
   if(!purpose || (purpose==="other" && details.length<8))throw new Error("Selecione o motivo e, se for Outro, descreva a finalidade.");
   return {p_holder_mode:holderMode,p_holder_name:name,p_holder_role:role,p_purpose:purpose,p_purpose_details:details||null};
 }
+function schoolDeadlineLocal(){
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(p=>[p.type,p.value]));
+  const today=`${parts.year}-${parts.month}-${parts.day}`;
+  const todayDeadline=`${today}T21:15`;
+  // Após o fechamento, a próxima data útil deve ser escolhida explicitamente.
+  const afterClose=`${parts.hour}:${parts.minute}`>='21:10';
+  return {today,todayDeadline,afterClose};
+}
 function openCheckoutModal(items) {
-  const firstDue=new Date(Date.now()+2*60*60*1000);
+  const school=schoolDeadlineLocal();
   const maxDue=new Date(Date.now()+30*24*60*60*1000);
   const names=items.slice(0,3).map(x=>x.label||x.code||x.cart_number||"Equipamento").join(", ");
   const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Nova retirada · ${items.length} equipamento(s)</span><h2>Confirmar entrega</h2><p>${esc(names)}${items.length>3?` e mais ${items.length-3}`:""}</p></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><form id="checkout-form" class="form-grid custody-form">
     ${custodyFormFields()}
-    <section class="custody-block span-2"><div class="custody-heading"><span class="custody-step">3</span><div><strong>Quando será devolvido?</strong><small>O prazo precisa ser posterior ao horário atual.</small></div></div><label>Previsão de devolução<input name="due_at" type="datetime-local" required min="${localDateTimeValue(new Date(Date.now()+6*60*1000))}" max="${localDateTimeValue(maxDue)}" value="${localDateTimeValue(firstDue)}"></label></section>
+    <section class="custody-block span-2"><div class="custody-heading"><span class="custody-step">3</span><div><strong>Quando será devolvido?</strong><small>O prazo precisa ser posterior ao horário atual.</small></div></div><label>Previsão de devolução (até 21h15)<input name="due_at" type="datetime-local" required min="${localDateTimeValue(new Date(Date.now()+6*60*1000))}" max="${localDateTimeValue(maxDue)}" value="${school.todayDeadline}" data-school-cutoff="21:15"></label><small class="school-deadline-hint">${school.afterClose?'O prazo de hoje já encerrou; escolha outra data.':'Preenchido com hoje às 21h15. A escola encerra as retiradas às 21h15.'}</small></section>
     <p class="custody-note span-2">O registro identifica sua conta, a pessoa que recebeu e a finalidade. A disponibilidade dos equipamentos é confirmada no servidor.</p><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Confirmar ${items.length} retirada${items.length>1?"s":""}</button></div></form></div>`,true);
   const form=qs("#checkout-form",m);bindCustodyForm(form);setupSmartInputs(m);
   const action=uid();
   form.addEventListener("submit",async ev=>{
     ev.preventDefault();const b=qs('button[type="submit"]',form);
     let context;try{context=custodyPayload(form);}catch(error){return notify(error.message,"warning");}
-    const f=new FormData(form),due=new Date(String(f.get("due_at")));
+    const f=new FormData(form),dueValue=String(f.get('due_at')||''),due=new Date(`${dueValue}:00-03:00`);
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dueValue)||dueValue.slice(11)>'21:15')
+      return notify('O horário máximo de devolução é 21h15, no horário de São Paulo.','warning');
     if(!Number.isFinite(due.getTime())||due.getTime()<=Date.now()+5*60*1000||due.getTime()>Date.now()+30*24*60*60*1000)
-      return notify("Selecione uma previsão válida: de 5 minutos a 30 dias.","warning");
+      return notify('Escolha uma previsão futura válida, de até 30 dias, antes das 21h15.','warning');
     setBusy(b,true,"Registrando…");
     let result;
     try{result=await supabase.rpc("equipa_checkout_with_context",{
@@ -1054,6 +1154,7 @@ function openCheckoutModal(items) {
     });}catch(error){result={error};}
     setBusy(b,false);
     if(result.error)return notify(errText(result.error),"error");
+    invalidateEquipaActivity();
     notify("Retirada registrada com responsável, destino e finalidade.","success");
     m.remove();navigate("withdrawals");
   });
@@ -1095,10 +1196,10 @@ async function renderWithdrawals(){
   const openPicker=()=>openCheckoutEquipmentPicker();
   qs("#withdrawal-new-desktop")?.addEventListener("click",openPicker);
   qs("#withdrawal-new-mobile")?.addEventListener("click",openPicker);
-  qs("#ops-status")?.addEventListener("change",e=>{state.withdrawalsStatus=e.target.value;loadWithdrawals();});
-  qsa("[data-ops-quick]").forEach(b=>b.addEventListener("click",()=>{state.withdrawalsStatus=b.dataset.opsQuick;qs("#ops-status").value=state.withdrawalsStatus;qsa("[data-ops-quick]").forEach(x=>x.classList.toggle("selected",x===b));loadWithdrawals();}));
-  qs("#withdrawal-sort")?.addEventListener("change",e=>{state.withdrawalsSort=e.target.value;loadWithdrawals();});
-  let timer;qs("#withdrawal-search")?.addEventListener("input",e=>{clearTimeout(timer);const value=e.target.value;state.withdrawalsSearch=value;timer=setTimeout(()=>loadWithdrawals(),150);});
+  qs("#ops-status")?.addEventListener("change",e=>{state.withdrawalsStatus=e.target.value;paintOperationalSnapshot();});
+  qsa("[data-ops-quick]").forEach(b=>b.addEventListener("click",()=>{state.withdrawalsStatus=b.dataset.opsQuick;qs("#ops-status").value=state.withdrawalsStatus;qsa("[data-ops-quick]").forEach(x=>x.classList.toggle("selected",x===b));paintOperationalSnapshot();}));
+  qs("#withdrawal-sort")?.addEventListener("change",e=>{state.withdrawalsSort=e.target.value;paintOperationalSnapshot();});
+  let timer;qs("#withdrawal-search")?.addEventListener("input",e=>{clearTimeout(timer);state.withdrawalsSearch=e.target.value;timer=setTimeout(paintOperationalSnapshot,130);});
   setupSmartInputs(app);
   await loadWithdrawals();
 }
@@ -1136,6 +1237,26 @@ function renderOpsRows(rows){
  }).join("");
  return `<div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Equipamento</th><th>Situação</th><th>Registrado por</th><th>Em posse de</th><th>Turma / Local</th><th>Motivo</th><th>Previsão / atualização</th><th>Ações</th></tr></thead><tbody>${cells}</tbody></table></div><div class="ops-table-foot">${rows.length} equipamento(s) exibido(s)</div>`;
 }
+let operationsSnapshot=null;
+function paintOperationalSnapshot(){
+ const snapshot=operationsSnapshot,host=qs('#withdrawals'),overview=qs('#withdrawal-overview');
+ if(!snapshot||!host||state.view!=='withdrawals')return;
+ const {inventory,activeError}=snapshot;
+ let rows=snapshot.rows.slice();
+ const counts={in_use:0,available:0,overdue:0,maintenance:0,unavailable:0};for(const r of rows)counts[operationalState(r)]++;
+ if(overview)overview.innerHTML=`${[['in_use','Em uso','Equipamentos em circulação'],['available','Disponíveis','Prontos para retirada'],['overdue','Atrasadas','Devoluções fora do prazo'],['maintenance','Manutenção','Precisam de reparo']].map(([code,title,sub])=>`<button class="ops-stat ${code}" data-ops-stat="${code}" type="button"><span class="ops-stat-title">${esc(title)}</span><strong>${code==='in_use'?counts.in_use+counts.overdue:counts[code]}</strong><small>${esc(sub)}</small></button>`).join('')}${counts.unavailable?`<p class="ops-disabled-count">${counts.unavailable} equipamento(s) indisponível(is)</p>`:''}`;
+ qsa('[data-ops-stat]').forEach(b=>b.addEventListener('click',()=>{state.withdrawalsStatus=b.dataset.opsStat;qs('#ops-status').value=state.withdrawalsStatus;qsa('[data-ops-quick]').forEach(x=>x.classList.toggle('selected',x.dataset.opsQuick===state.withdrawalsStatus));paintOperationalSnapshot();}));
+ if(state.withdrawalsStatus==='attention')rows=rows.filter(e=>['overdue','maintenance','unavailable'].includes(operationalState(e)));
+ else if(state.withdrawalsStatus==='not_in_use')rows=rows.filter(e=>['available','maintenance','unavailable'].includes(operationalState(e)));
+ else if(state.withdrawalsStatus==='in_use')rows=rows.filter(e=>['in_use','overdue'].includes(operationalState(e)));
+ else if(state.withdrawalsStatus)rows=rows.filter(e=>operationalState(e)===state.withdrawalsStatus);
+ rows=smartFilter(rows,state.withdrawalsSearch,e=>[e.code,e.asset_tag,e.label,e.brand,e.model,e.location_text,e.class_name,e.destination,e.custodian_name,e.responsible_name,e.recorded_by_name,e.student_name,e.checkout_purpose,withdrawalPurposeLabel(e.checkout_purpose),operationalState(e),opsStatusLabel(operationalState(e))]);
+ rows.sort((a,b)=>state.withdrawalsSort==='code'?String(a.code).localeCompare(String(b.code),'pt-BR',{numeric:true}):state.withdrawalsSort==='recent'?new Date(b.withdrawn_at||b.updated_at||0)-new Date(a.withdrawn_at||a.updated_at||0):opsStatusPriority[operationalState(a)]-opsStatusPriority[operationalState(b)]||String(a.code).localeCompare(String(b.code),'pt-BR',{numeric:true}));
+ host.innerHTML=renderOpsRows(rows);
+ qsa('[data-withdrawal-id]',host).forEach(b=>b.addEventListener('click',()=>openWithdrawalDetail(b.dataset.withdrawalId)));
+ qsa('[data-ops-equipment]',host).forEach(b=>b.addEventListener('click',async()=>{const item=inventory.find(x=>x.id===b.dataset.opsEquipment);if(!item)return;if(item.status==='available')openCheckoutModal([item]);else openEquipment(item.id)}));
+ if(activeError&&state.profile?.role!=='student')notify('Alguns detalhes de posse não estão disponíveis para esta conta.','warning');
+}
 async function loadWithdrawals(){
  const host=qs("#withdrawals"),overview=qs("#withdrawal-overview");if(!host)return;
  const marker=Symbol();state.opsRequest=marker;
@@ -1153,20 +1274,21 @@ async function loadWithdrawals(){
  if(state.opsRequest!==marker||!host.isConnected)return;
  const byEquipment=new Map();
  if(!active.error)for(const r of active.data||[])for(const item of r.withdrawal_items||[])if(!item.returned_at&&!byEquipment.has(String(item.equipment_id)))byEquipment.set(String(item.equipment_id),{...r,withdrawal_id:r.id});
+ if(state.profile?.role==='student'){
+   try {
+     const feed=await getSchoolActivity();
+     if(state.opsRequest!==marker||!host.isConnected)return;
+     for(const item of feed.occupancy||[]){
+       if(!byEquipment.has(String(item.equipment_id)))byEquipment.set(String(item.equipment_id),{
+         custodian_name:item.holder_name,custodian_role:item.holder_role,
+         custody_mode:item.declared?'delegate':'self',recorded_by_name:'Consulta escolar',withdrawal_id:null
+       });
+     }
+   }catch(error){notify('Não foi possível consultar quem está com os equipamentos em uso.','warning');}
+ }
  let rows=inventory.map(e=>{const active=byEquipment.get(String(e.id));if(!active)return e;const {id:withdrawalRowId,status:withdrawalRowStatus,...detail}=active;return {...e,...detail};});
- const counts={in_use:0,available:0,overdue:0,maintenance:0,unavailable:0};for(const r of rows)counts[operationalState(r)]++;
- if(overview)overview.innerHTML=`${[["in_use","Em uso","Equipamentos em circulação"],["available","Disponíveis","Prontos para retirada"],["overdue","Atrasadas","Devoluções fora do prazo"],["maintenance","Manutenção","Precisam de reparo"]].map(([code,title,sub])=>`<button class="ops-stat ${code}" data-ops-stat="${code}" type="button"><span class="ops-stat-title">${esc(title)}</span><strong>${code==="in_use"?counts.in_use+counts.overdue:counts[code]}</strong><small>${esc(sub)}</small></button>`).join("")}${counts.unavailable?`<p class="ops-disabled-count">${counts.unavailable} equipamento(s) indisponível(is)</p>`:""}`;
- qsa("[data-ops-stat]").forEach(b=>b.addEventListener("click",()=>{state.withdrawalsStatus=b.dataset.opsStat;qs("#ops-status").value=state.withdrawalsStatus;qsa("[data-ops-quick]").forEach(x=>x.classList.toggle("selected",x.dataset.opsQuick===state.withdrawalsStatus));loadWithdrawals();}));
- if(state.withdrawalsStatus==="attention")rows=rows.filter(e=>["overdue","maintenance","unavailable"].includes(operationalState(e)));
- else if(state.withdrawalsStatus==="not_in_use")rows=rows.filter(e=>["available","maintenance","unavailable"].includes(operationalState(e)));
- else if(state.withdrawalsStatus==="in_use")rows=rows.filter(e=>["in_use","overdue"].includes(operationalState(e)));
- else if(state.withdrawalsStatus)rows=rows.filter(e=>operationalState(e)===state.withdrawalsStatus);
- rows=smartFilter(rows,state.withdrawalsSearch,e=>[e.code,e.asset_tag,e.label,e.brand,e.model,e.location_text,e.class_name,e.destination,e.custodian_name,e.responsible_name,e.recorded_by_name,e.student_name,e.checkout_purpose,withdrawalPurposeLabel(e.checkout_purpose),operationalState(e),opsStatusLabel(operationalState(e))]);
- rows.sort((a,b)=>state.withdrawalsSort==="code"?String(a.code).localeCompare(String(b.code),"pt-BR",{numeric:true}):state.withdrawalsSort==="recent"?new Date(b.withdrawn_at||b.updated_at||0)-new Date(a.withdrawn_at||a.updated_at||0):opsStatusPriority[operationalState(a)]-opsStatusPriority[operationalState(b)]||String(a.code).localeCompare(String(b.code),"pt-BR",{numeric:true}));
- host.innerHTML=renderOpsRows(rows);
- qsa("[data-withdrawal-id]",host).forEach(b=>b.addEventListener("click",()=>openWithdrawalDetail(b.dataset.withdrawalId)));
- qsa("[data-ops-equipment]",host).forEach(b=>b.addEventListener("click",async()=>{const item=inventory.find(x=>x.id===b.dataset.opsEquipment);if(!item)return; if(item.status==="available")openCheckoutModal([item]);else openEquipment(item.id);}));
- if(active.error)notify("A situação dos equipamentos foi carregada, mas detalhes de posse podem estar restritos pela conta atual.","warning");
+ operationsSnapshot={inventory,rows,activeError:active.error};
+ paintOperationalSnapshot();
 }
 async function openWithdrawalDetail(withdrawalId) {
   const [{data:w,error:we},{data:items,error:ie}]=await Promise.all([
@@ -1191,6 +1313,7 @@ async function openWithdrawalDetail(withdrawalId) {
     const button=qs("#return-batch",m);setBusy(button,true,"Registrando…");
     const {data,error}=await supabase.rpc("equipa_return_items",{p_withdrawal_id:Number(withdrawalId),p_items:entries,p_client_action_id:action});setBusy(button,false);
     if(error)return notify(errText(error),"error");
+    invalidateEquipaActivity();
     notify(data?.complete?"Retirada encerrada após conferência.":`${data?.pending??"?"} equipamento(s) ainda pendente(s).`,"success");
     m.remove();await loadWithdrawals();openWithdrawalDetail(withdrawalId);
   });
@@ -1202,7 +1325,7 @@ async function renderHistory() {
   qs("#history-filter-toggle")?.addEventListener("click", ()=>{ state.historyFiltersOpen = qs("#history-filter-panel")?.classList.contains("open"); });
   qs("#history-filter")?.addEventListener("click", ()=>loadHistory());
   qs("#history-filter-clear")?.addEventListener("click", ()=>{ ["#h-equipment", "#h-person", "#h-student", "#h-class", "#h-status", "#history-smart"].forEach(sel => { const el = qs(sel); if (el) el.value = ""; }); loadHistory(); });
-  let timer; qs("#history-smart")?.addEventListener("input", e=>{ clearTimeout(timer); timer=setTimeout(()=>loadHistory(e.target.value),180); });
+  let timer; qs("#history-smart")?.addEventListener("input", e=>{ clearTimeout(timer); timer=setTimeout(()=>loadHistory(e.target.value),420); });
   await loadHistory();
 }
 async function loadHistory(smartQuery=""){
@@ -1228,7 +1351,7 @@ async function renderCarts() {
   if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhum carrinho encontrado.</strong><span>O administrador pode cadastrar os lotes usados pela escola.</span></div>`;return}
   const perPage=50,total=rows.length,maxPage=Math.max(0,Math.ceil(total/perPage)-1);state.cartPage=Math.min(state.cartPage,maxPage);const from=state.cartPage*perPage;const page=rows.slice(from,from+perPage);
   h.innerHTML=`<div class="data-list">${page.map(c=>{const record={id:c.cart_id,number:c.cart_number,name:c.cart_name||"",qr_token:c.qr_token,location_text:c.location_text||"",capacity:c.capacity||null,notes:c.notes||"",equipment_codes:c.equipment_codes||[],is_active:c.is_active};return `<button class="data-row cart-row" type="button" data-cart-token="${esc(c.qr_token)}" data-cart-record='${esc(JSON.stringify(record))}'><div class="data-main"><strong>${esc(c.cart_name||`Carrinho ${c.cart_number}`)}</strong><span>${Number(c.item_count||0)} equipamento(s)${c.capacity?` de ${Number(c.capacity)} vagas`:""}${c.location_text?` · ${esc(c.location_text)}`:""}</span></div><span class="status status-available">Ativo</span><span class="data-date">#${c.cart_number}</span></button>`}).join("")}</div><div class="pagination"><span>${total} carrinho(s)</span><div><button class="button small" id="cart-prev" ${state.cartPage===0?'disabled':''}>Anterior</button><button class="button small" id="cart-next" ${state.cartPage>=maxPage?'disabled':''}>Próxima</button></div></div>`;
-  let timer;qs("#cart-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.cartSearch=e.target.value;state.cartPage=0;renderCarts()},180)});
+  bindCommittedSearch(qs('#cart-search'),value=>{state.cartSearch=value;state.cartPage=0;renderCarts()});
   qs("#cart-prev")?.addEventListener("click",()=>{state.cartPage--;renderCarts()});qs("#cart-next")?.addEventListener("click",()=>{state.cartPage++;renderCarts()});
   qsa("[data-cart-token]").forEach(b=>b.addEventListener("click",()=>openCart(b.dataset.cartToken)));
 }
@@ -1272,7 +1395,7 @@ async function openCartForm(item=null){
 
 async function deactivateCart(record){const ok=await confirmAction({title:"Desativar carrinho?",message:`${record.name||`Carrinho ${record.number}`} deixará de aparecer para operação, mas o histórico será preservado.`,confirmText:"Desativar",danger:true});if(!ok)return;const {error}=await supabase.from("equipment_carts").update({is_active:false}).eq("id",Number(record.id));if(error)return notify(errText(error),"error");notify("Carrinho desativado.","success");renderCarts()}
 
-async function renderMaintenance(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="maintenance";const filterCount=activeFilterCount([state.maintenanceStatus]);shell(`<section class="panel workspace-panel"><h1 class="visually-hidden">Manutenção</h1><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="maintenance-search" class="search" type="search" value="${esc(state.maintenanceSearch)}" placeholder="Buscar equipamento, título ou observação"><button class="filter-button ${filterCount ? 'has-active active' : ''}" id="maintenance-filter-toggle" type="button" aria-expanded="${filterCount ? 'true' : 'false'}">${icon("filter")}<span>Filtros</span>${filterBadge(filterCount)}</button></div></div><div class="filter-drawer" id="maintenance-filter-panel"><div class="filter-grid"><label>Status<select id="maintenance-status"><option value="">Todos</option><option value="open" ${state.maintenanceStatus==='open'?'selected':''}>Aberta</option><option value="resolved" ${state.maintenanceStatus==='resolved'?'selected':''}>Resolvida</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="maintenance-filter-clear" type="button">Limpar filtros</button><button class="button primary small" id="maintenance-filter-apply" type="button">Aplicar</button></div></div><div id="maintenance"><div class="loading">Carregando…</div></div></section>`);const {data,error}=await supabase.from("maintenance_events").select("id,equipment_id,title,notes,resolution,status,opened_at,closed_at,equipments(code,label,brand,model)").order("opened_at",{ascending:false}).limit(300);const h=qs("#maintenance");if(error){h.innerHTML=`<div class="empty"><strong>Erro.</strong><span>${esc(errText(error))}</span></div>`;return}let rows=data||[];rows=smartFilter(rows,state.maintenanceSearch,x=>[x.title,x.notes,x.resolution,x.equipments?.label,x.equipments?.code,x.equipments?.brand,x.equipments?.model,statusLabel(x.status)]);if(state.maintenanceStatus)rows=rows.filter(x=>x.status===state.maintenanceStatus);if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhuma manutenção registrada.</strong><span>Abra um equipamento e escolha Manutenção.</span></div>`;}else{h.innerHTML=`<div class="data-list">${rows.map(x=>`<div class="data-row"><div class="data-main"><strong>${esc(x.equipments?.label||x.equipments?.code)} · ${esc(x.title)}</strong><span>${esc(x.equipments?.brand||"")} ${esc(x.equipments?.model||"")} · aberta ${esc(dt(x.opened_at))}</span></div><span class="status status-${esc(x.status)}">${esc(statusLabel(x.status))}</span><div class="row-actions">${x.status==="open"?`<button class="button primary small" data-resolve="${x.id}">Concluir</button>`:""}</div></div>`).join("")}</div>`;qsa("[data-resolve]").forEach(b=>b.addEventListener("click",()=>resolveMaintenance(Number(b.dataset.resolve))));}let timer;qs("#maintenance-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.maintenanceSearch=e.target.value;renderMaintenance()},180)});wireFilterToggle("maintenance-filter-toggle", "maintenance-filter-panel");qs("#maintenance-filter-apply")?.addEventListener("click",()=>{state.maintenanceStatus=qs("#maintenance-status")?.value||"";renderMaintenance()});qs("#maintenance-filter-clear")?.addEventListener("click",()=>{state.maintenanceStatus="";renderMaintenance()});}
+async function renderMaintenance(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="maintenance";const filterCount=activeFilterCount([state.maintenanceStatus]);shell(`<section class="panel workspace-panel"><h1 class="visually-hidden">Manutenção</h1><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="maintenance-search" class="search" type="search" value="${esc(state.maintenanceSearch)}" placeholder="Buscar equipamento, título ou observação"><button class="filter-button ${filterCount ? 'has-active active' : ''}" id="maintenance-filter-toggle" type="button" aria-expanded="${filterCount ? 'true' : 'false'}">${icon("filter")}<span>Filtros</span>${filterBadge(filterCount)}</button></div></div><div class="filter-drawer" id="maintenance-filter-panel"><div class="filter-grid"><label>Status<select id="maintenance-status"><option value="">Todos</option><option value="open" ${state.maintenanceStatus==='open'?'selected':''}>Aberta</option><option value="resolved" ${state.maintenanceStatus==='resolved'?'selected':''}>Resolvida</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="maintenance-filter-clear" type="button">Limpar filtros</button><button class="button primary small" id="maintenance-filter-apply" type="button">Aplicar</button></div></div><div id="maintenance"><div class="loading">Carregando…</div></div></section>`);const {data,error}=await supabase.from("maintenance_events").select("id,equipment_id,title,notes,resolution,status,opened_at,closed_at,equipments(code,label,brand,model)").order("opened_at",{ascending:false}).limit(300);const h=qs("#maintenance");if(error){h.innerHTML=`<div class="empty"><strong>Erro.</strong><span>${esc(errText(error))}</span></div>`;return}let rows=data||[];rows=smartFilter(rows,state.maintenanceSearch,x=>[x.title,x.notes,x.resolution,x.equipments?.label,x.equipments?.code,x.equipments?.brand,x.equipments?.model,statusLabel(x.status)]);if(state.maintenanceStatus)rows=rows.filter(x=>x.status===state.maintenanceStatus);if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhuma manutenção registrada.</strong><span>Abra um equipamento e escolha Manutenção.</span></div>`;}else{h.innerHTML=`<div class="data-list">${rows.map(x=>`<div class="data-row"><div class="data-main"><strong>${esc(x.equipments?.label||x.equipments?.code)} · ${esc(x.title)}</strong><span>${esc(x.equipments?.brand||"")} ${esc(x.equipments?.model||"")} · aberta ${esc(dt(x.opened_at))}</span></div><span class="status status-${esc(x.status)}">${esc(statusLabel(x.status))}</span><div class="row-actions">${x.status==="open"?`<button class="button primary small" data-resolve="${x.id}">Concluir</button>`:""}</div></div>`).join("")}</div>`;qsa("[data-resolve]").forEach(b=>b.addEventListener("click",()=>resolveMaintenance(Number(b.dataset.resolve))));}bindCommittedSearch(qs('#maintenance-search'),value=>{state.maintenanceSearch=value;renderMaintenance()});wireFilterToggle("maintenance-filter-toggle", "maintenance-filter-panel");qs("#maintenance-filter-apply")?.addEventListener("click",()=>{state.maintenanceStatus=qs("#maintenance-status")?.value||"";renderMaintenance()});qs("#maintenance-filter-clear")?.addEventListener("click",()=>{state.maintenanceStatus="";renderMaintenance()});}
 function resolveMaintenance(id){const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Manutenção</span><h2>Concluir manutenção</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="resolve-form" class="auth-form"><label>Resolução<textarea name="resolution" maxlength="1200" placeholder="O que foi feito"></textarea></label><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Concluir</button></div></form></div>`);qs("#resolve-form",m).addEventListener("submit",async e=>{e.preventDefault();const b=qs('button[type="submit"]',e.currentTarget);setBusy(b,true,"Concluindo…");const f=new FormData(e.currentTarget);const {error}=await supabase.rpc("resolve_maintenance",{p_event_id:id,p_resolution:f.get("resolution").trim()||null});setBusy(b,false);if(error)return notify(errText(error),"error");notify("Manutenção concluída.","success");m.remove();renderMaintenance()})}
 
 
@@ -1415,7 +1538,7 @@ async function renderAdmin(){
   go("#ea-manage-roles",()=>{qs("#ea-users-section")?.scrollIntoView({block:"start",behavior:"smooth"});qs("#ea-role-filter")?.focus()});
   go("#ea-see-all",()=>{equipaAdminRoleFilter="";state.adminUserSearch="";state.adminUserPage=0;qs("#ea-role-filter").value="";qs("#ea-user-search").value="";loadAdminUsers()});
   qs("#ea-role-filter")?.addEventListener("change",e=>{equipaAdminRoleFilter=e.target.value;state.adminUserPage=0;loadAdminUsers()});
-  let userSearchTimer;qs("#ea-user-search")?.addEventListener("input",e=>{clearTimeout(userSearchTimer);userSearchTimer=setTimeout(()=>{state.adminUserSearch=e.target.value.trim();state.adminUserPage=0;loadAdminUsers()},250)});
+  let userSearchTimer;qs("#ea-user-search")?.addEventListener("input",e=>{clearTimeout(userSearchTimer);userSearchTimer=setTimeout(()=>{state.adminUserSearch=e.target.value.trim();state.adminUserPage=0;loadAdminUsers()},420)});
   go("#ea-go-equipment",()=>navigate("equipment"));
   go("#ea-storage-details",()=>{
     const summary=qs("#ea-db-usage")?.textContent||"Indisponível";
@@ -1476,7 +1599,7 @@ function openUserForm(u){const m=makeModal(`<div class="panel-head"><div><span c
 async function adminUserAction(u,action,hours=null){const labels={approve:"aprovar o acesso",restore:"restaurar o acesso",remove:"remover o acesso",ban:"banir a conta",unban:"remover o banimento"};if(["remove","ban"].includes(action)){const ok=await confirmAction({title:"Confirmar ação administrativa?",message:`Deseja ${labels[action]} de ${u.full_name}? O evento ficará registrado na auditoria.`,confirmText:"Confirmar",danger:true});if(!ok)return}const {data,error}=await supabase.functions.invoke("equipa-admin-users",{body:{action,userId:u.id,hours}});if(error||data?.error)return notify(data?.error||errText(error),"error");notify("Acesso do usuário atualizado.","success");loadAdminUsers()}
 function openBanUser(u){const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Controle de acesso</span><h2>Banir ${esc(u.full_name)}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><p class="muted">O banimento bloqueia novas autenticações pelo período escolhido. O histórico do usuário é preservado.</p><label>Duração<select id="ban-hours"><option value="24">24 horas</option><option value="168" selected>7 dias</option><option value="720">30 dias</option><option value="876000">Indeterminado</option></select></label><div class="modal-actions"><button class="button" data-close type="button">Cancelar</button><button class="button danger-solid" id="confirm-ban" type="button">Banir usuário</button></div></div>`);qs("#confirm-ban",m)?.addEventListener("click",()=>{const hours=Number(qs("#ban-hours",m).value);m.remove();adminUserAction(u,"ban",hours)})}
 
-async function renderAudit(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="audit";shell(`<section class="panel workspace-panel"><h1 class="visually-hidden">Auditoria</h1><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input class="search" id="audit-search" value="${esc(state.auditSearch)}" placeholder="Buscar pessoa, resumo ou registro"><button class="filter-button" id="audit-filter-toggle" type="button"><span>Filtros</span></button></div></div><div class="filter-drawer" id="audit-filter-panel"><div class="filter-grid"><label>Tipo<select id="audit-entity"><option value="">Todos</option><option value="equipments">Equipamentos</option><option value="withdrawals">Retiradas</option><option value="withdrawal_items">Itens de retirada</option><option value="equipment_carts">Carrinhos</option><option value="maintenance_events">Manutenção</option><option value="profiles">Usuários</option><option value="user_access">Acesso de usuários</option><option value="legal_acceptances">Aceites legais</option></select></label><label>Ação<select id="audit-action"><option value="">Todas</option><option value="insert">Criação</option><option value="update">Alteração</option><option value="delete">Exclusão</option><option value="approve">Aprovação</option><option value="remove">Remoção de acesso</option><option value="ban">Banimento</option><option value="unban">Desbanimento</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="audit-clear">Limpar</button><button class="button primary small" id="audit-apply">Aplicar</button></div></div><div id="audit-results"><div class="loading">Carregando auditoria…</div></div></section>`);wireFilterToggle("audit-filter-toggle","audit-filter-panel");qs("#audit-entity").value=state.auditEntity;qs("#audit-action").value=state.auditAction;qs("#audit-apply")?.addEventListener("click",()=>{state.auditEntity=qs("#audit-entity").value;state.auditAction=qs("#audit-action").value;loadAudit()});qs("#audit-clear")?.addEventListener("click",()=>{state.auditEntity="";state.auditAction="";state.auditSearch="";renderAudit()});let timer;qs("#audit-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.auditSearch=e.target.value;loadAudit()},180)});await loadAudit()}
+async function renderAudit(){if(state.profile.role!=="admin")return navigate("dashboard");state.view="audit";shell(`<section class="panel workspace-panel"><h1 class="visually-hidden">Auditoria</h1><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input class="search" id="audit-search" value="${esc(state.auditSearch)}" placeholder="Buscar pessoa, resumo ou registro"><button class="filter-button" id="audit-filter-toggle" type="button"><span>Filtros</span></button></div></div><div class="filter-drawer" id="audit-filter-panel"><div class="filter-grid"><label>Tipo<select id="audit-entity"><option value="">Todos</option><option value="equipments">Equipamentos</option><option value="withdrawals">Retiradas</option><option value="withdrawal_items">Itens de retirada</option><option value="equipment_carts">Carrinhos</option><option value="maintenance_events">Manutenção</option><option value="profiles">Usuários</option><option value="user_access">Acesso de usuários</option><option value="legal_acceptances">Aceites legais</option></select></label><label>Ação<select id="audit-action"><option value="">Todas</option><option value="insert">Criação</option><option value="update">Alteração</option><option value="delete">Exclusão</option><option value="approve">Aprovação</option><option value="remove">Remoção de acesso</option><option value="ban">Banimento</option><option value="unban">Desbanimento</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="audit-clear">Limpar</button><button class="button primary small" id="audit-apply">Aplicar</button></div></div><div id="audit-results"><div class="loading">Carregando auditoria…</div></div></section>`);wireFilterToggle("audit-filter-toggle","audit-filter-panel");qs("#audit-entity").value=state.auditEntity;qs("#audit-action").value=state.auditAction;qs("#audit-apply")?.addEventListener("click",()=>{state.auditEntity=qs("#audit-entity").value;state.auditAction=qs("#audit-action").value;loadAudit()});qs("#audit-clear")?.addEventListener("click",()=>{state.auditEntity="";state.auditAction="";state.auditSearch="";renderAudit()});let timer;qs("#audit-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.auditSearch=e.target.value;loadAudit()},420)});await loadAudit()}
 async function loadAudit(){const pageSize=25;const {data,error}=await supabase.rpc("equipa_admin_audit_page",{p_page:state.auditPage,p_page_size:pageSize,p_entity:state.auditEntity||null,p_action:state.auditAction||null,p_search:state.auditSearch||null});const h=qs("#audit-results");if(!h)return;if(error){h.innerHTML=`<div class="empty"><strong>Erro ao carregar auditoria.</strong><span>${esc(errText(error))}</span><button class="button" id="audit-retry">Tentar novamente</button></div>`;qs("#audit-retry")?.addEventListener("click",loadAudit);return}const payload=Array.isArray(data)?data[0]:data||{};const rows=payload.rows||[];const total=Number(payload.total||0);const pages=Math.max(1,Math.ceil(total/pageSize));if(state.auditPage>=pages){state.auditPage=Math.max(0,pages-1);return loadAudit()}if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhum evento.</strong><span>Não há registros compatíveis com os filtros.</span></div>`;return}h.innerHTML=`<div class="data-list">${rows.map(x=>`<button class="data-row" type="button" data-audit='${esc(JSON.stringify(x))}'><div class="data-main"><strong>${esc(x.actor_name||"Sistema")} · ${esc(auditActionLabel(x.action))}</strong><span>${esc(auditEntityLabel(x.entity_type))}${x.entity_id?` · ${esc(x.entity_id)}`:""} · ${esc(x.summary||"")}</span></div><span class="status">${esc(auditActionLabel(x.action))}</span><span class="data-date">${esc(dt(x.occurred_at))}</span></button>`).join("")}</div><div class="pagination"><span>Página ${state.auditPage+1} de ${pages} · ${total} evento(s)</span><div><button class="button small" id="audit-prev" ${state.auditPage===0?'disabled':''}>Anterior</button><button class="button small" id="audit-next" ${state.auditPage+1>=pages?'disabled':''}>Próxima</button></div></div>`;qsa("[data-audit]").forEach(b=>b.addEventListener("click",()=>openAuditDetail(JSON.parse(b.dataset.audit))));qs("#audit-prev")?.addEventListener("click",()=>{state.auditPage--;loadAudit()});qs("#audit-next")?.addEventListener("click",()=>{state.auditPage++;loadAudit()})}
 function auditActionLabel(v){return({insert:"Criado",update:"Alterado",delete:"Excluído",approve:"Aprovado",restore:"Restaurado",remove:"Acesso removido",deactivate:"Desativado",ban:"Banido",unban:"Desbanido"})[v]||v||"Evento"}
 function auditEntityLabel(v){return({equipments:"Equipamento",withdrawals:"Retirada",withdrawal_items:"Item de retirada",equipment_carts:"Carrinho",equipment_cart_items:"Item do carrinho",maintenance_events:"Manutenção",profiles:"Usuário",user_access:"Acesso de usuário",legal_acceptances:"Aceite legal"})[v]||v||"Registro"}
@@ -1711,3 +1834,5 @@ async function boot() {
 }
 
 boot();
+setInterval(()=>{if(state.session&&state.profile&&document.visibilityState==='visible')refreshEquipaNotificationBadge().catch(()=>{});},45000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.session)refreshEquipaNotificationBadge().catch(()=>{});});

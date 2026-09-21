@@ -2,7 +2,7 @@
 
 Sistema web para controle de equipamentos escolares, com Supabase (autenticação, PostgreSQL e RLS) e frontend estático para GitHub Pages.
 
-**Versão: 0.2.4 Alpha.** Interface para desktop e celular.
+**Versão: 0.2.5 Alpha.** Interface para desktop e celular.
 
 ## Funções
 
@@ -17,6 +17,18 @@ Busca contextual e preenchimento assistido com resultados autorizados ao perfil
 Tema escuro e claro para as telas principais, formulários, modais e filtros
 Administração de usuários e equipamentos, com regras de acesso no servidor
 ```
+
+## Alterações da 0.2.5
+
+As buscas em Equipamentos e Retiradas atualizam somente os resultados, sem reconstruir a aba nem derrubar o foco do teclado. Nas buscas de Carrinhos e Manutenção, a página só é atualizada ao confirmar com Enter ou sair do campo, para impedir telas de carregamento durante a digitação. Histórico, Auditoria e Usuários usam atraso maior entre consultas. As sugestões continuam disponíveis, sem escolher automaticamente a primeira opção ao pressionar Enter.
+
+A previsão de devolução vem preenchida com a **data atual da escola às 21h15**. São Paulo é a referência de horário. Quando o prazo de hoje já não é válido, é necessário escolher outra data; o horário máximo de qualquer data continua sendo 21h15. Uma trigger do banco também rejeita previsões posteriores ao limite, inclusive fora do formulário.
+
+A área de notificações mostra registros recentes de retirada e devolução, atualizando enquanto o site está aberto, a cada 45 segundos (não é notificação nativa do aparelho). Alunos com conta escolar ativa podem consultar, na lista de equipamentos em uso, o nome da pessoa em posse, com indicação de identidade declarada quando pertinente; não são expostos e-mail, RA ou data de nascimento de terceiros.
+
+Todas as janelas do sistema possuem botão de fechar vermelho, acessível por toque ou mouse; filtros mobile, notificações, scanner e menu adicional recebem controles visíveis também no tema escuro.
+
+O Supabase do projeto `oxcfbsrukzfnzkivatsn` **já recebeu** a migration `20260921050807_equipa_0_2_5_school_cutoff_activity.sql`. Não a execute novamente nesse projeto. Os dados existentes foram mantidos. Consulte `RELEASE-0.2.5.md`.
 
 ## Alterações da 0.2.4
 

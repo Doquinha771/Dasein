@@ -1489,3 +1489,37 @@ html[data-theme="dark"]{--equipa-action:#2269df;--equipa-action-hover:#3983f5;--
  html[data-theme="dark"] .main .topbar .mobile-top-name .topbar-kicker{color:var(--ink)!important}
  html[data-theme="dark"] .mobile-tabbar .mobile-qr-action>span{background:var(--equipa-action)!important;color:#fff!important}
 }
+
+/* 0.2.5 — botões reais e consistentes para fechar janelas, filtros e avisos. */
+.modal{position:relative}
+.modal>.modal-close-control{
+  position:sticky;top:12px;margin:12px 12px -56px auto;
+  display:grid;place-items:center;z-index:120;
+  width:44px;min-width:44px;height:44px;min-height:44px;
+  border-radius:12px;border:1px solid #a71b1b;
+  background:#c62828;color:#fff;font-size:30px;font-weight:700;
+  line-height:1;cursor:pointer;box-shadow:0 5px 15px rgba(130,13,13,.23);
+}
+.modal>.modal-close-control:hover,.modal>.modal-close-control:focus-visible,
+.filter-sheet-close:hover,.equipa-notice-close:hover,.infobox-close:hover,
+#mobile-more-close:hover,.scanner-close:hover{
+  background:#a61b1b!important;color:#fff!important;outline:2px solid #ffb5b5;outline-offset:2px;
+}
+.modal .panel-head,.modal .ref-modal-top{padding-right:70px!important;min-height:66px}
+.filter-sheet-close,.equipa-notice-close,.infobox-close,
+#mobile-more-close,.scanner-close{
+  display:grid!important;place-items:center!important;
+  width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;
+  padding:0!important;border:1px solid #a71b1b!important;
+  border-radius:11px!important;background:#c62828!important;color:#fff!important;
+  font-size:27px!important;font-weight:750!important;line-height:1!important;
+  cursor:pointer;
+}
+#mobile-more-close{font-size:27px!important}
+#mobile-more-close::after{content:none!important}
+html[data-theme='dark'] .modal>.modal-close-control,
+html[data-theme='dark'] :is(.filter-sheet-close,.equipa-notice-close,.infobox-close,#mobile-more-close,.scanner-close){
+  background:#b42323!important;border-color:#ec6666!important;color:#fff!important;
+}
+.school-deadline-hint{display:block;color:var(--muted);font-size:12px;margin-top:6px}
+@media(max-width:820px){.modal>.modal-close-control{top:10px;margin:10px 10px -54px auto;z-index:130}.modal .panel-head,.modal .ref-modal-top{padding-right:66px!important}}
