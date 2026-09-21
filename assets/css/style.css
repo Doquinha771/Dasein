@@ -1523,3 +1523,142 @@ html[data-theme='dark'] :is(.filter-sheet-close,.equipa-notice-close,.infobox-cl
 }
 .school-deadline-hint{display:block;color:var(--muted);font-size:12px;margin-top:6px}
 @media(max-width:820px){.modal>.modal-close-control{top:10px;margin:10px 10px -54px auto;z-index:130}.modal .panel-head,.modal .ref-modal-top{padding-right:66px!important}}
+
+/* Equipa 0.2.6 — Uma navegação no mobile; busca ganha o espaço do antigo menu/wordmark. */
+@media (max-width:820px) {
+  .app-shell>.sidebar,.app-shell>.mobile-sidebar-shade,
+  .main>.topbar .topbar-greeting,.main>.topbar .menu-toggle,
+  .main>.topbar .mobile-top-name{display:none!important}
+  .main>.topbar{display:flex!important;align-items:center!important;gap:9px!important;padding:8px max(12px,env(safe-area-inset-left))!important}
+  .main>.topbar .global-search,
+  .main:has(.view-withdrawals)>.topbar .global-search{
+    display:flex!important;flex:1 1 0!important;width:auto!important;max-width:none!important;min-width:0!important;
+    margin:0!important;background:var(--surface-soft)!important;border:1px solid var(--line)!important;
+    color:var(--ink)!important;box-shadow:none!important
+  }
+  .main>.topbar .global-search input{font-size:16px!important;text-overflow:ellipsis;color:var(--ink)!important}
+  .main>.topbar .global-search kbd{display:none!important}
+  .main>.topbar .topbar-right{display:flex!important;flex:0 0 auto!important;margin-left:0!important;gap:0!important}
+  .main>.topbar #topbar-alerts{display:grid!important;color:var(--ink)!important;
+    background:var(--surface)!important;border:1px solid var(--line)!important}
+  .mobile-sheet-theme{width:100%;min-height:50px;margin-top:12px;display:flex;align-items:center;gap:12px;
+    padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+    background:var(--surface-soft);color:var(--ink);font:inherit;font-weight:700;text-align:left}
+  .mobile-sheet-theme svg{flex:none;color:var(--equipa-action)}
+  .mobile-sheet-theme:focus-visible{outline:3px solid var(--equipa-action);outline-offset:2px}
+  /* O destaque inicial acompanha a mesma identidade azul de Retiradas, inclusive à luz do dia. */
+  .content .mobile-home-hero{
+    background:linear-gradient(145deg,#eff5ff 0%,#e2edff 100%)!important;
+    color:#203656!important;border:1px solid #d5e3fa!important;border-radius:19px!important;
+    margin:5px 12px 0!important;padding:17px 17px 39px!important
+  }
+  .content .mobile-home-hero::before{background:rgba(40,100,217,.055)!important}
+  .content .mobile-home-hero::after{border-color:rgba(40,100,217,.045)!important}
+  .content .mobile-home-hero :is(.mobile-home-greeting h1,.mobile-health-copy strong,.mobile-health-copy>span,.mobile-health-ring strong){color:#193657!important}
+  .content .mobile-home-hero :is(.mobile-home-eyebrow,.mobile-home-greeting span,.mobile-health-copy small,.mobile-health-ring span){color:#4b6388!important}
+  .content .mobile-health-ring{background:conic-gradient(var(--equipa-action) 0 var(--health),#c5d7f2 var(--health) 360deg)!important}
+  .content .mobile-health-ring::before{background:#eff5ff!important}
+  .content .mobile-home-progress{background:#c6d6ec!important}
+  .content .mobile-home-progress>i:first-child{background:var(--equipa-action)!important}
+  .content .mobile-home-progress .use{background:#89b1f4!important}
+  .content .mobile-home-progress .maint{background:#e49a5c!important}
+  .content .mobile-now{margin-top:0!important;border-radius:0!important;box-shadow:none!important}
+}
+/* Escuro não é somente mudar o body. Estas regras têm prioridade sobre estilos claros antigos. */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --mobile-bg:#0b1422;--mobile-ink:#e9f1fd;--mobile-line:#344961;
+  --sf-text:#e9f1fd;--sf-blue-soft:#223d60;--sf-blue:#8dbdff;
+  --border:#364c65;--card:#152335;
+}
+html[data-theme="dark"] :is(body,.app-shell,.main,.content,.content.view-dashboard,
+ .content:not(.view-dashboard),.mobile-dashboard-organic){background:var(--bg)!important;color:var(--ink)!important}
+html[data-theme="dark"] :is(.topbar,.mobile-tabbar,.mobile-more-sheet,
+ .mobile-more-list,.filter-sheet-head,.filter-actions,.ref-equipment-filters.open,
+ .filter-drawer.open,.booking-filter-panel.open,.modal-actions,.custody-form .modal-actions,
+ .ref-welcome-main,.ref-welcome-date,.ref-actions,.ref-alerts-body,
+ .ref-distribution-body,.ref-ring-center,.ref-ring-legend,.ref-kpi,.ref-panel,
+ .ref-page-heading,.ref-results-panel,.ref-search-panel,.ref-results-heading,
+ .ref-inventory-table,.ref-inventory-table td,.ref-inventory-table th,
+ .ref-table-wrap,.ref-row-more,.ref-filter-action,.ref-display-button,
+ .ref-outline-action,.ref-action,.ref-no-alert,.ref-empty-movements,
+ .workspace-panel,.admin-workspace,.ea-admin,.ea-stat,.ea-card,.ea-panel,.ea-tools,
+ .ea-user-controls,.ea-user-row,.ea-user-card,.eq-intake-table,.eq-intake-table td,
+ .report-card,.report-filter-strip,.report-table,.report-table-wrap,
+ .report-table td,.report-table th,.report-note,.report-donut-center,.report-hero,
+ .ops-heading,.ops-stat,.ops-search-panel,.ops-results,.ops-table-row,.ops-table th,.ops-table td,
+ .ops-search,.ops-filters,.ops-quick-tabs,.ops-table-foot,.pagination,.data-row,.data-list,
+ .detail,.return-list,.return-item,.equipment-notes,.withdrawal-card,
+ .withdrawal-card-details,.withdrawal-card-foot,.withdrawal-overview>span,
+ .withdrawal-search-wrap,.withdrawal-pick-list,.withdrawal-pick-item,
+ .custody-block,.custody-form,.custody-choice label,.custody-note,.custody-actor,
+ .withdrawal-detail-person,.delivery-journey,.journey-detail,.delivery-steps,
+ .mobile-stat-flow,.mobile-stat-pill,.mobile-flow-section,.mobile-activity-feed,
+ .mobile-activity-list,.mobile-empty-state,.mobile-shortcuts,.mobile-more-list .nav-button,
+ .panel,.modal,.modal-body,.auth-card,.auth-tabs,.auth-tab.active,.auth-side,
+ .equipa-notification-panel,.equipa-notification-head,.equipa-notice-item,.equipa-notice-foot,
+ .equipa-watermark,.smart-suggestions,.smart-suggestions button,.connection-check,
+ .mobile-sheet-theme){background:var(--surface)!important;border-color:var(--line)!important;color:var(--ink)!important}
+html[data-theme="dark"] :is(.global-search,.search,.ops-search,.withdrawal-search-wrap,
+ .ref-search-panel,.ref-equipment-filters,.ref-equipment-filters.open,
+ .filter-drawer,.filter-grid,.booking-filter-panel,
+ .report-filter-strip,.report-card select,.ref-inventory-table select,
+ .custody-block,.mobile-sheet-theme,.mobile-more-list .nav-button){background:var(--surface-soft)!important;border-color:var(--line)!important;color:var(--ink)!important}
+html[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]),
+ select,textarea,option,optgroup,.search,.ref-form-grid input,.ref-form-grid textarea,
+ .ref-form-grid select,.ea-user-controls input,.ea-user-controls select,
+ .custody-block input,.custody-block select,.custody-block textarea,
+ .ops-search input,.ops-filters select,.ref-equipment-filters input,
+ .ref-equipment-filters select,.filter-drawer input,.filter-drawer select,
+ .filter-drawer textarea){background-color:#1e324a!important;border-color:#506885!important;color:#f0f6ff!important;
+  -webkit-text-fill-color:#f0f6ff!important;caret-color:#a9caff!important;box-shadow:none!important}
+html[data-theme="dark"] :is(input,textarea)::placeholder{color:#bfd0e7!important;opacity:1!important}
+html[data-theme="dark"] input:-webkit-autofill,
+html[data-theme="dark"] input:-webkit-autofill:hover,
+html[data-theme="dark"] input:-webkit-autofill:focus{
+  -webkit-box-shadow:0 0 0 1000px #1e324a inset!important;
+  -webkit-text-fill-color:#f0f6ff!important;caret-color:#f0f6ff!important}
+html[data-theme="dark"] :is(input,select,textarea,.search,.global-search):focus-visible,
+html[data-theme="dark"] :is(.mobile-sheet-theme,.ref-filter-action,.button):focus-visible{
+  outline:2px solid #8bbcff!important;outline-offset:2px!important}
+html[data-theme="dark"] :is(.ref-search-panel,.ref-results-panel,.ops-results,.ops-stat,.ref-panel,
+ .ea-card,.report-card,.mobile-flow-section,.mobile-more-list .nav-button){box-shadow:none!important}
+/* O cabeçalho mobile é um cartão azul discreto no tema escuro, sem texto escuro sobre fundo azul. */
+@media(max-width:820px){
+ html[data-theme="dark"] .main>.topbar{background:#122238!important;border-color:var(--line)!important}
+ html[data-theme="dark"] .main>.topbar .global-search{background:#1e324a!important;border-color:#506885!important}
+ html[data-theme="dark"] .content .mobile-home-hero{
+   background:linear-gradient(145deg,#1b3553,#192d47)!important;
+   color:#eff6ff!important;border-color:#405a7c!important}
+ html[data-theme="dark"] .content .mobile-home-hero :is(.mobile-home-greeting h1,.mobile-health-copy strong,.mobile-health-copy>span,.mobile-health-ring strong){color:#eff6ff!important}
+ html[data-theme="dark"] .content .mobile-home-hero :is(.mobile-home-eyebrow,.mobile-home-greeting span,.mobile-health-copy small,.mobile-health-ring span){color:#bdd0e9!important}
+ html[data-theme="dark"] .content .mobile-health-ring{background:conic-gradient(#7badff 0 var(--health),#365371 var(--health) 360deg)!important}
+ html[data-theme="dark"] .content .mobile-health-ring::before{background:#192d47!important}
+ html[data-theme="dark"] .content .mobile-home-progress{background:#344e6b!important}
+ html[data-theme="dark"] .content .mobile-home-progress>i:first-child{background:#7badff!important}
+ html[data-theme="dark"] .mobile-now{background:var(--surface)!important}
+ html[data-theme="dark"] .mobile-tabbar{background:#17253a!important;border-color:var(--line)!important}
+ html[data-theme="dark"] .mobile-more-list .nav-button{background:#1b3049!important;border-color:var(--line)!important}
+ html[data-theme="dark"] .mobile-more-list .nav-button.active{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important}
+ html[data-theme="dark"] .mobile-sheet-theme{background:#1b3049!important;color:#eff6ff!important}
+}
+/* Não neutralizar cores semânticas nem controles críticos na limpeza de superfícies. */
+html[data-theme="dark"] :is(.button.primary,.ref-primary-action,.ref-dark-action,.ops-create,
+ .withdrawal-mobile-cta,.dashboard-main-action){background:var(--equipa-action)!important;color:#fff!important;border-color:var(--equipa-action)!important}
+html[data-theme="dark"] :is(.modal-close-control,.filter-sheet-close,.equipa-notice-close,
+ .infobox-close,#mobile-more-close,.scanner-close){background:#b42323!important;color:#fff!important;border-color:#ec6666!important}
+/* 0.2.6 - auditoria visual: superfícies que ainda eram claras nas nove abas. */
+html[data-theme="dark"] :is(.ref-search-control,.ref-inventory-table thead,
+ .ref-inventory-table tbody,.ref-inventory-table tr,.ref-inventory-table tr.equipment-row,
+ .workspace-toolbar,.toolbar.workspace-toolbar,.filter-button:not(.active),
+ .ref-equipment-icon,.ref-patrimony.ref-none,.ref-kpi-icon,.ref-kpi-change,
+ .report-mini-icon,.ea-stat>button){
+  background:#1b2e45!important;border-color:var(--line)!important;color:var(--ink)!important;
+}
+html[data-theme="dark"] :is(.ref-kpi-icon,.report-mini-icon,.ref-equipment-icon){color:#9bc6ff!important}
+html[data-theme="dark"] .ref-state.ref-state-available{background:#144a38!important;color:#94f2bc!important}
+html[data-theme="dark"] :is(.ref-state.ref-state-in_use,.ref-state.ref-state-in-use){background:#214773!important;color:#b3d4ff!important}
+html[data-theme="dark"] :is(.ref-state.ref-state-maintenance,.ref-state.ref-state-unavailable){background:#562c36!important;color:#ffadb4!important}
+html[data-theme="dark"] :is(.ref-inventory-table tbody tr:hover,.ref-inventory-table tbody tr:focus-within){background:#263c56!important}
+html[data-theme="dark"] :is(.ref-inventory-table td,.ref-inventory-table th,.workspace-toolbar,
+ .ref-search-control,.filter-button,.ea-stat>button){border-color:var(--line)!important}

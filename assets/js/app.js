@@ -445,7 +445,7 @@ function shell(content) {
     <button type="button" class="mobile-sidebar-shade" id="mobile-sidebar-shade" aria-label="Fechar menu lateral" tabindex="-1"></button>
     <section class="main">
       <header class="topbar">
-        <div class="topbar-greeting"><button class="nav-icon menu-toggle" id="menu" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">☰</button><div class="mobile-top-name"><span class="topbar-kicker">Equipa</span></div></div>
+        
         <form class="global-search" id="global-search-form" role="search">${uiIcon("search",18)}<input id="global-search" type="search" value="${esc(currentGlobalSearchValue())}" placeholder="Pesquisar equipamento, turma, aluno ou manutenção..." autocomplete="off"><kbd>Ctrl K</kbd></form>
         <div class="topbar-right"><button type="button" class="topbar-tool" id="topbar-alerts" aria-label="Abrir notificações" aria-haspopup="dialog" aria-expanded="false">${uiIcon("bell",21)}<i hidden></i></button><button type="button" class="topbar-tool" id="topbar-theme" aria-label="Alternar tema">${uiIcon(document.documentElement.dataset.theme === "dark" ? "moon" : "sun",21)}</button><div class="topbar-divider"></div><div class="school-identification"><span>${uiIcon("school",23)}</span><div><strong>E.E. Amador e Catharina</strong><small>Equipa · Gestão escolar</small></div></div></div>
       </header>
@@ -454,7 +454,7 @@ function shell(content) {
     <nav class="mobile-tabbar" aria-label="Navegação do aplicativo">
       ${mobileNav("dashboard","Início")}${mobileNav("equipment","Equipamentos")}<button class="mobile-nav-item mobile-qr-action" id="mobile-qr-scan" type="button" aria-label="Ler QR Code"><span class="mobile-qr-icon">${uiIcon("qr",20)}</span><small>Ler QR</small></button>${mobileNav("withdrawals","Retiradas")}<button class="mobile-nav-item mobile-more-action ${["history","carts","maintenance","reports","audit","admin"].includes(state.view)?"active":""}" id="mobile-more" type="button" aria-haspopup="dialog" aria-expanded="false">${uiIcon("grid",20)}<small>Mais</small></button>
     </nav>
-    <div class="mobile-more-backdrop" id="mobile-more-backdrop"><section class="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Outras páginas"><div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><div><span>Mais opções</span><strong>Equipa</strong></div><button class="icon-button" id="mobile-more-close" type="button">×</button></div><div class="mobile-more-list">${mobileMoreItems}</div><button class="mobile-sheet-logout" id="mobile-sheet-logout" type="button"><span>Sair da conta</span></button></section></div>
+    <div class="mobile-more-backdrop" id="mobile-more-backdrop"><section class="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Outras páginas"><div class="mobile-sheet-handle"></div><div class="mobile-sheet-head"><div><span>Mais opções</span><strong>Equipa</strong></div><button class="icon-button" id="mobile-more-close" type="button">×</button></div><div class="mobile-more-list">${mobileMoreItems}</div><button class="mobile-sheet-theme" id="mobile-sheet-theme" type="button" aria-label="Alternar tema visual">${uiIcon(document.documentElement.dataset.theme === "dark" ? "sun" : "moon",20)}<span>${document.documentElement.dataset.theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}</span></button><button class="mobile-sheet-logout" id="mobile-sheet-logout" type="button"><span>Sair da conta</span></button></section></div>
   </div>`;
   qsa("[data-view]").forEach(b => b.addEventListener("click", () => navigate(b.dataset.view)));
   const setMobileSidebar = (open) => {
@@ -473,6 +473,14 @@ function shell(content) {
   refreshEquipaNotificationBadge().catch(()=>{});
   const closeMobileMore = () => {qs("#mobile-more-backdrop")?.classList.remove("open");document.body.classList.remove("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","false")};
   qs("#mobile-more")?.addEventListener("click", () => {qs("#mobile-more-backdrop")?.classList.add("open");document.body.classList.add("mobile-overlay-open");qs("#mobile-more")?.setAttribute("aria-expanded","true")});
+  qs("#mobile-sheet-theme")?.addEventListener("click", () => {
+    setEquipaTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    const themeButton = qs("#mobile-sheet-theme");
+    if (themeButton) {
+      const dark = document.documentElement.dataset.theme === "dark";
+      themeButton.innerHTML = `${uiIcon(dark ? "sun" : "moon",20)}<span>${dark ? "Ativar modo claro" : "Ativar modo escuro"}</span>`;
+    }
+  });
   qs("#mobile-more-close")?.addEventListener("click", closeMobileMore);
   qs("#mobile-more-backdrop")?.addEventListener("click", e => { if (e.target?.id === "mobile-more-backdrop") closeMobileMore(); });
   document.addEventListener("keydown", function mobileShellEscape(e){

@@ -2,7 +2,7 @@
 
 Sistema web para controle de equipamentos escolares, com Supabase (autenticação, PostgreSQL e RLS) e frontend estático para GitHub Pages.
 
-**Versão: 0.2.5 Alpha.** Interface para desktop e celular.
+**Versão: 0.2.6 Alpha.** Interface para desktop e celular.
 
 ## Funções
 
@@ -17,6 +17,12 @@ Busca contextual e preenchimento assistido com resultados autorizados ao perfil
 Tema escuro e claro para as telas principais, formulários, modais e filtros
 Administração de usuários e equipamentos, com regras de acesso no servidor
 ```
+
+## Alterações da 0.2.6
+
+No celular, a barra superior apresenta somente busca global e notificações, sem botão de menu lateral e sem o nome duplicado junto da pesquisa. As opções secundárias, sair e alternar o tema estão no menu **Mais** da barra inferior. O cartão de boas-vindas na tela Início usa a paleta azul de Retiradas. O modo escuro foi revisado em todas as abas, incluindo campos, dropdowns, filtros, tabelas e janelas; a busca continua disponível na aba Retiradas.
+
+Este hotfix modifica somente o frontend. Nenhuma nova migration nem modificação no Supabase são necessárias. Consulte `RELEASE-0.2.6.md`.
 
 ## Alterações da 0.2.5
 
@@ -53,7 +59,7 @@ A pesquisa sugere códigos, modelos, turmas, nomes e locais que a conta autentic
 3. Envie os arquivos da raiz deste pacote para a raiz de publicação do seu GitHub Pages, substituindo a versão anterior e mantendo `.nojekyll`.
 4. Confira em celular e desktop: login, estados de uso, busca, retirada, devolução, modo escuro e linha do tempo.
 
-O ZIP é um pacote de **publicação, não uma prova de deploy**. Não houve acesso autenticado para testar os fluxos com contas reais no ambiente publicado. Veja `RELEASE-0.2.4.md` para instruções e limites dos testes.
+O ZIP é um pacote de **publicação, não uma prova de deploy**. Não houve acesso autenticado para testar os fluxos com contas reais no ambiente publicado. Veja `RELEASE-0.2.6.md` para instruções e limites dos testes.
 
 ## Segurança
 
