@@ -4,7 +4,7 @@
 
 **Gestão responsável de equipamentos escolares.**
 
-![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1.2--alpha-5d666d?style=for-the-badge)
+![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.2--alpha-5d666d?style=for-the-badge)
 ![Plataforma](https://img.shields.io/badge/plataforma-web-69737a?style=for-the-badge)
 ![Estado](https://img.shields.io/badge/estado-alpha%20em%20testes-78838a?style=for-the-badge)
 ![Privacidade](https://img.shields.io/badge/privacidade-LGPD-626d74?style=for-the-badge)
@@ -27,7 +27,9 @@ QR Code permanente por equipamento
 QR Code por carrinho
 Leitura de QR pelo celular
 Download de QR Codes em lote
-Retirada individual com prazo de devolução
+Retirada individual com prazo de devolução, recebedor, destino e finalidade
+Identificação distinta da conta que registra e da pessoa que recebe
+Identidade de terceiros sinalizada como declarada, sem fingir validação por login
 Retirada seletiva por carrinho
 Devolução com data e horário
 Fila de retiradas atrasadas
@@ -105,13 +107,13 @@ A área de auditoria permite acompanhar eventos relevantes, como alterações no
 
 ## Integração com Supabase
 
-O projeto Supabase conectado é `oxcfbsrukzfnzkivatsn`. As migrations corretivas 0.2.1 e 0.2.1.1 já foram aplicadas ao projeto, junto do Cron de auditorias. Para publicar no GitHub Pages, consulte `HOTFIX-0.2.1.2-SUPABASE.md`. A tela de login tem o botão **Testar conexão**.
+O projeto Supabase conectado é `oxcfbsrukzfnzkivatsn`. As migrations corretivas 0.2.1 e 0.2.1.1 já foram aplicadas ao projeto, junto do Cron de auditorias. Para publicar no GitHub Pages, consulte `RELEASE-0.2.2.md`. As RPCs de guarda e finalidade da retirada da versão 0.2.2 foram aplicadas em produção. A tela de login tem o botão **Testar conexão**.
 
 ## Estado do projeto
 
 ```text
 Nome        Equipa
-Versão      0.2.1.2 Alpha
+Versão      0.2.2 Alpha
 Plataforma  Web responsiva
 Uso         Gestão de equipamentos escolares
 Estado      Alpha · testes e piloto restrito

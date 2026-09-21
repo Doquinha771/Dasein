@@ -28,6 +28,7 @@ const state = {
   equipmentFilters: { status: "", active: "active", group: "", location:"", model:"" },
   withdrawalsSearch: "",
   withdrawalsStatus: "",
+  withdrawalsSort: "recent",
   withdrawalsDue: new Map(),
   reservationsSearch: "",
   reservationsStatus: "",
@@ -139,6 +140,9 @@ function errText(error) {
     EQUIPA_DUE_DATE_INVALID: "Escolha um prazo de devolução entre 5 minutos e 30 dias a partir de agora.",
     EQUIPA_RESERVATION_CONFLICT: "Há uma reserva confirmada durante o período desta retirada. Ajuste o prazo ou utilize a reserva existente.",
     EQUIPA_BATCH_SIZE_INVALID: "Selecione de 1 a 60 equipamentos.",
+    EQUIPA_CUSTODY_INVALID: "Informe quem receberá o equipamento e o vínculo com a escola.",
+    EQUIPA_CUSTODY_SELF_REQUIRED: "A retirada em nome de outra pessoa exige um professor ou administrador autenticado.",
+    EQUIPA_PURPOSE_REQUIRED: "Informe o motivo da retirada e detalhe o objetivo quando selecionar Outro.",
   };
   Object.assign(map, {
     EQUIPA_INSUFFICIENT_STOCK: "Não há equipamentos suficientes para todas as datas solicitadas.",
@@ -656,6 +660,7 @@ async function renderDashboard() {
   </section>`);
 
   qsa("[data-go],[data-open]").forEach(b => b.addEventListener("click", () => navigate(b.dataset.go || b.dataset.open)));
+  qsa("[data-withdrawal-id]").forEach(b=>b.addEventListener("click",()=>openWithdrawalDetail(b.dataset.withdrawalId)));
   qs("#ref-add-equipment")?.addEventListener("click",()=>window.EquipaInventory?.openHub("individual"));
 }
 function closeContextMenu(){qs("#equipa-context-menu")?.remove()}
@@ -911,32 +916,91 @@ function localDateTimeValue(date){
   const pad=n=>String(n).padStart(2,"0");
   return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
+function custodyFormFields(options={}) {
+  const name=state.profile?.full_name||"Usuário autenticado";
+  const currentRole=roleLabel(state.profile?.role);
+  const canDelegate=state.profile?.role!=="student";
+  return `<section class="custody-block span-2" aria-label="Quem está retirando"><div class="custody-heading"><span class="custody-step">1</span><div><strong>Quem ficará com o equipamento?</strong><small>Separe quem registra de quem recebe fisicamente.</small></div></div>
+    <div class="custody-actor"><span>${uiIcon("admin",19)}</span><div><small>Registro feito pela conta autenticada</small><strong>${esc(name)} · ${esc(currentRole)}</strong></div></div>
+    <fieldset class="custody-choice"><legend>Quem receberá os equipamentos?</legend><label><input type="radio" name="holder_mode" value="self" checked><span>Eu mesmo <small>O material ficará comigo.</small></span></label>${canDelegate?`<label><input type="radio" name="holder_mode" value="delegate"><span>Outra pessoa <small>Vou entregar a um aluno ou funcionário.</small></span></label>`:""}</fieldset>
+    <div class="custody-delegate" hidden><label>Nome completo de quem vai receber<input name="holder_name" maxlength="120" autocomplete="off" placeholder="Ex.: João Pedro da Silva Santos"></label><label>Vínculo com a escola<select name="holder_role"><option value="">Selecione</option><option value="student">Aluno</option><option value="teacher">Professor</option><option value="staff">Funcionário</option></select></label><p class="custody-note">O nome informado pelo registrador não equivale à identificação por login. O histórico indicará “identidade declarada”.</p></div>
+  </section>
+  <section class="custody-block span-2" aria-label="Finalidade da retirada"><div class="custody-heading"><span class="custody-step">2</span><div><strong>Para onde e por quê?</strong><small>Estas informações serão salvas no histórico da retirada.</small></div></div>
+    <div class="custody-destination"><label>Turma ou setor<input name="class_name" required maxlength="120" placeholder="Ex.: 3º A ou Secretaria" value="${esc(options.class_name||"")}" ${options.fixed?'readonly':''}></label><label>Destino real<input name="destination" required maxlength="160" placeholder="Ex.: Sala 12, laboratório de TI" value="${esc(options.destination||"")}" ${options.fixed?'readonly':''}></label></div>
+    <label>Motivo da retirada<select name="purpose" required><option value="">Selecione a finalidade</option><option value="lesson">Aula</option><option value="assessment">Avaliação</option><option value="project">Projeto ou atividade</option><option value="support">Suporte técnico</option><option value="other">Outro motivo</option></select></label>
+    <label class="custody-purpose-detail" hidden>Explique a finalidade<textarea name="purpose_details" maxlength="240" rows="2" placeholder="Descreva em poucas palavras o que será feito com os equipamentos"></textarea></label>
+  </section>`;
+}
+function bindCustodyForm(form) {
+  const refresh=()=>{
+    const delegated=form.elements.holder_mode?.value==="delegate";
+    const holder=qs(".custody-delegate",form);
+    if(holder)holder.hidden=!delegated;
+    const recipient=form.elements.holder_name, role=form.elements.holder_role;
+    if(recipient)recipient.required=delegated;
+    if(role)role.required=delegated;
+    const other=form.elements.purpose?.value==="other";
+    const detail=qs(".custody-purpose-detail",form);
+    if(detail)detail.hidden=!other;
+    if(form.elements.purpose_details)form.elements.purpose_details.required=other;
+  };
+  qsa('input[name="holder_mode"]',form).forEach(input=>input.addEventListener("change",refresh));
+  form.elements.purpose?.addEventListener("change",refresh);
+  refresh();
+}
+function custodyPayload(form) {
+  const f=new FormData(form);
+  const holderMode=String(f.get("holder_mode")||"self");
+  const role=holderMode==="delegate"?String(f.get("holder_role")||""):null;
+  const name=holderMode==="delegate"?String(f.get("holder_name")||"").trim():null;
+  const purpose=String(f.get("purpose")||"");
+  const details=String(f.get("purpose_details")||"").trim();
+  if(holderMode==="delegate" && (name.length<3||!role))throw new Error("Informe o nome completo e o vínculo de quem receberá os equipamentos.");
+  if(!purpose || (purpose==="other" && details.length<8))throw new Error("Selecione o motivo e, se for Outro, descreva a finalidade.");
+  return {p_holder_mode:holderMode,p_holder_name:name,p_holder_role:role,p_purpose:purpose,p_purpose_details:details||null};
+}
 function openCheckoutModal(items) {
   const firstDue=new Date(Date.now()+2*60*60*1000);
   const maxDue=new Date(Date.now()+30*24*60*60*1000);
-  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Retirada</span><h2>${items.length===1?esc(items[0].label||items[0].code):`${items.length} equipamentos`}</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="checkout-form" class="form-grid"><label>Turma<input name="class_name" required maxlength="120" placeholder="3º A"></label><label>Destino<input name="destination" required maxlength="160" placeholder="Sala 12"></label><label>Previsão de devolução<input name="due_at" type="datetime-local" required min="${localDateTimeValue(new Date(Date.now()+6*60*1000))}" max="${localDateTimeValue(maxDue)}" value="${localDateTimeValue(firstDue)}"></label>${state.profile.role!=="student"&&items.length===1?`<label>Aluno responsável (opcional)<input name="student_name" maxlength="120"></label>`:""}<p class="muted span-2">O prazo será registrado no histórico. Reservas futuras conflitantes impedem a retirada.</p><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Confirmar retirada</button></div></form></div>`,true);
+  const names=items.slice(0,3).map(x=>x.label||x.code||x.cart_number||"Equipamento").join(", ");
+  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Nova retirada · ${items.length} equipamento(s)</span><h2>Confirmar entrega</h2><p>${esc(names)}${items.length>3?` e mais ${items.length-3}`:""}</p></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><form id="checkout-form" class="form-grid custody-form">
+    ${custodyFormFields()}
+    <section class="custody-block span-2"><div class="custody-heading"><span class="custody-step">3</span><div><strong>Quando será devolvido?</strong><small>O prazo precisa ser posterior ao horário atual.</small></div></div><label>Previsão de devolução<input name="due_at" type="datetime-local" required min="${localDateTimeValue(new Date(Date.now()+6*60*1000))}" max="${localDateTimeValue(maxDue)}" value="${localDateTimeValue(firstDue)}"></label></section>
+    <p class="custody-note span-2">O registro identifica sua conta, a pessoa que recebeu e a finalidade. A disponibilidade dos equipamentos é confirmada no servidor.</p><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Confirmar ${items.length} retirada${items.length>1?"s":""}</button></div></form></div>`,true);
+  const form=qs("#checkout-form",m);bindCustodyForm(form);
   const action=uid();
-  qs("#checkout-form",m).addEventListener("submit",async ev=>{
-    ev.preventDefault();
-    const b=qs('button[type="submit"]',ev.currentTarget);
-    const f=new FormData(ev.currentTarget);
-    const due=new Date(String(f.get("due_at")));
+  form.addEventListener("submit",async ev=>{
+    ev.preventDefault();const b=qs('button[type="submit"]',form);
+    let context;try{context=custodyPayload(form);}catch(error){return notify(error.message,"warning");}
+    const f=new FormData(form),due=new Date(String(f.get("due_at")));
     if(!Number.isFinite(due.getTime())||due.getTime()<=Date.now()+5*60*1000||due.getTime()>Date.now()+30*24*60*60*1000)
       return notify("Selecione uma previsão válida: de 5 minutos a 30 dias.","warning");
     setBusy(b,true,"Registrando…");
     let result;
-    try { result=await supabase.rpc("checkout_with_due",{
+    try{result=await supabase.rpc("equipa_checkout_with_context",{
       p_equipment_ids:items.map(x=>x.equipment_id||x.id),
       p_class_name:String(f.get("class_name")||"").trim(),
       p_destination:String(f.get("destination")||"").trim(),
-      p_student_name:String(f.get("student_name")||"").trim()||null,
-      p_due_at:due.toISOString(),p_client_action_id:action
-    }); }
-    catch(error){result={error};}
+      p_due_at:due.toISOString(),p_client_action_id:action,...context
+    });}catch(error){result={error};}
     setBusy(b,false);
     if(result.error)return notify(errText(result.error),"error");
-    notify("Retirada confirmada com previsão de devolução.","success");
+    notify("Retirada registrada com responsável, destino e finalidade.","success");
     m.remove();navigate("withdrawals");
+  });
+}
+async function openBookingCustodyModal(reservationId,booking) {
+  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Retirada de reserva</span><h2>Quem receberá os equipamentos?</h2><p>Confirme o responsável e o motivo antes de retirar o lote reservado.</p></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><form id="booking-custody-form" class="form-grid custody-form">
+  ${custodyFormFields({class_name:booking.class_name,destination:booking.destination,fixed:true})}
+  <p class="custody-note span-2">A turma, o destino, os equipamentos e o prazo seguem os dados da reserva.</p><div class="modal-actions span-2"><button class="button" type="button" data-close>Cancelar</button><button class="button primary" type="submit">Confirmar retirada</button></div></form></div>`,true);
+  const form=qs("#booking-custody-form",m);bindCustodyForm(form);
+  const action=uid();
+  form.addEventListener("submit",async ev=>{
+    ev.preventDefault();let context;try{context=custodyPayload(form);}catch(error){return notify(error.message,"warning");}
+    const button=qs('[type="submit"]',form);setBusy(button,true,"Registrando…");
+    const {error}=await supabase.rpc("equipa_checkout_booking_with_context",{p_reservation_id:Number(reservationId),p_client_action_id:action,...context});
+    setBusy(button,false);if(error)return notify(errText(error),"error");
+    m.remove();notify("Retirada da reserva identificada e registrada.","success");navigate("withdrawals");
   });
 }
 function buildBookingOccurrences(startValue, endValue, repeatCount) {
@@ -1002,53 +1066,100 @@ async function openQrModal(token,title,subtitle="") {
   qs("#copy-qr",m).addEventListener("click",async()=>{await navigator.clipboard.writeText(qrUrl(token));notify("Link copiado.","success")});qs("#print-qr",m).addEventListener("click",()=>window.print());
 }
 
+function withdrawalStatus(r) {
+  return r.status==="open"&&r.due_at&&new Date(r.due_at).getTime()<Date.now()?"overdue":r.status;
+}
+function withdrawalPurposeLabel(v){return({lesson:"Aula",assessment:"Avaliação",project:"Projeto ou atividade",support:"Suporte técnico",other:"Outro motivo"})[v]||"Não informado no registro antigo";}
+function withdrawalRoleLabel(v){return ({student:"Aluno",teacher:"Professor",admin:"Administrador",staff:"Funcionário"})[v]||"Vínculo não informado";}
+function withdrawalSummary(r){
+  const receiver=r.custodian_name||r.responsible_name||"Não identificado";
+  const receiverRole=r.custodian_role?` · ${withdrawalRoleLabel(r.custodian_role)}`:"";
+  const reason=r.checkout_purpose?withdrawalPurposeLabel(r.checkout_purpose):("checkout_purpose" in r?"Motivo não registrado":"Consultar motivo nos detalhes");
+  return {receiver,receiverRole,reason};
+}
 async function renderWithdrawals() {
   state.view="withdrawals";
-  const filterCount = activeFilterCount([state.withdrawalsStatus]);
-  shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Operação</span><h2>Retiradas</h2><p>Acompanhe equipamentos em uso e devoluções da escola.</p></div></div><div class="toolbar workspace-toolbar"><div class="toolbar-cluster"><input id="withdrawal-search" class="search" type="search" value="${esc(state.withdrawalsSearch)}" placeholder="Buscar turma, destino, responsável ou equipamento"><button class="filter-button ${filterCount ? 'has-active active' : ''}" id="withdrawal-filter-toggle" type="button" aria-expanded="${filterCount ? 'true' : 'false'}">${icon("filter")}<span>Filtros</span>${filterBadge(filterCount)}</button></div></div><div class="filter-drawer" id="withdrawal-filter-panel"><div class="filter-grid"><label>Status<select id="withdrawal-status"><option value="">Todos</option><option value="open" ${state.withdrawalsStatus==='open'?'selected':''}>Em aberto</option><option value="returned" ${state.withdrawalsStatus==='returned'?'selected':''}>Devolvida</option><option value="overdue" ${state.withdrawalsStatus==='overdue'?'selected':''}>Atrasadas</option><option value="cancelled" ${state.withdrawalsStatus==='cancelled'?'selected':''}>Cancelada</option></select></label></div><div class="filter-actions"><button class="button small ghost" id="withdrawal-filter-clear" type="button">Limpar filtros</button><button class="button primary small" id="withdrawal-filter-apply" type="button">Aplicar</button></div></div><div id="withdrawals"><div class="loading">Carregando retiradas…</div></div></section>`);
+  shell(`<section class="withdrawal-page" aria-label="Retiradas e devoluções"><header class="withdrawal-page-head"><div><span class="eyebrow">Operação escolar</span><h1>Retiradas</h1><p>Saiba quem está com cada equipamento, onde e por quê.</p></div><button class="button primary withdrawal-new desktop-only" id="withdrawal-new-desktop" type="button">${uiIcon("plus",19)} Nova retirada</button></header>
+  <div class="withdrawal-overview" id="withdrawal-overview" aria-live="polite"></div>
+  <label class="withdrawal-search-wrap">${uiIcon("search",19)}<input id="withdrawal-search" type="search" autocomplete="off" value="${esc(state.withdrawalsSearch)}" placeholder="Buscar pessoa, turma, sala, equipamento…" aria-label="Buscar retiradas"></label>
+  <div class="withdrawal-toolbar"><div class="withdrawal-status-tabs" role="group" aria-label="Filtrar retiradas"><button type="button" data-withdrawal-filter="" class="${!state.withdrawalsStatus?'selected':''}">Todas</button><button type="button" data-withdrawal-filter="open" class="${state.withdrawalsStatus==='open'?'selected':''}">Em aberto</button><button type="button" data-withdrawal-filter="returned" class="${state.withdrawalsStatus==='returned'?'selected':''}">Devolvidas</button><button type="button" data-withdrawal-filter="overdue" class="${state.withdrawalsStatus==='overdue'?'selected':''}">Atrasadas</button></div><label class="withdrawal-sort">Ordenar<select id="withdrawal-sort"><option value="recent" ${state.withdrawalsSort==='recent'?'selected':''}>Mais recentes</option><option value="due" ${state.withdrawalsSort==='due'?'selected':''}>Prazo de devolução</option></select></label></div>
+  <div id="withdrawals" class="withdrawal-results" aria-live="polite"><div class="loading">Carregando retiradas…</div></div>
+  <button type="button" class="withdrawal-mobile-cta" id="withdrawal-new-mobile">${uiIcon("plus",20)} Nova retirada</button></section>`);
+  const openPicker=()=>openCheckoutEquipmentPicker();
+  qs("#withdrawal-new-desktop")?.addEventListener("click",openPicker);
+  qs("#withdrawal-new-mobile")?.addEventListener("click",openPicker);
+  qsa("[data-withdrawal-filter]").forEach(b=>b.addEventListener("click",()=>{state.withdrawalsStatus=b.dataset.withdrawalFilter;qsa("[data-withdrawal-filter]").forEach(x=>x.classList.toggle("selected",x===b));loadWithdrawals();}));
+  qs("#withdrawal-sort")?.addEventListener("change",e=>{state.withdrawalsSort=e.target.value;loadWithdrawals();});
+  let timer;qs("#withdrawal-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.withdrawalsSearch=e.target.value;loadWithdrawals();},170);});
   await loadWithdrawals();
-  let timer;
-  qs("#withdrawal-search")?.addEventListener("input",e=>{clearTimeout(timer);timer=setTimeout(()=>{state.withdrawalsSearch=e.target.value;loadWithdrawals()},180)});
-  wireFilterToggle("withdrawal-filter-toggle", "withdrawal-filter-panel");
-  qs("#withdrawal-filter-apply")?.addEventListener("click", () => { state.withdrawalsStatus = qs("#withdrawal-status")?.value || ""; loadWithdrawals(); });
-  qs("#withdrawal-filter-clear")?.addEventListener("click", () => { state.withdrawalsStatus = ""; loadWithdrawals(); });
+}
+async function openCheckoutEquipmentPicker(){
+  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Nova retirada</span><h2>Selecione um equipamento</h2><p>Escolha um computador disponível. Para vários equipamentos, utilize a seleção no inventário.</p></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><label>Buscar por número ou modelo<input type="search" id="withdrawal-pick-search" placeholder="Ex.: NOTE-001" autocomplete="off"></label><div class="withdrawal-pick-list" id="withdrawal-pick-list"><div class="loading">Carregando equipamentos…</div></div><div class="modal-actions"><button class="button ghost" id="withdrawal-go-inventory" type="button">Selecionar vários no inventário</button></div></div>`,true);
+  qs("#withdrawal-go-inventory",m)?.addEventListener("click",()=>{m.remove();navigate("equipment");});
+  const {data,error}=await supabase.from("equipments").select("id,code,label,brand,model,school_group,location_text").eq("is_active",true).eq("status","available").order("code").limit(100);
+  const host=qs("#withdrawal-pick-list",m);if(!host)return;
+  if(error){host.innerHTML=`<div class="empty"><strong>Não foi possível buscar os equipamentos.</strong><span>${esc(errText(error))}</span></div>`;return;}
+  const rows=data||[];
+  const render=()=>{const q=(qs("#withdrawal-pick-search",m)?.value||"").toLocaleLowerCase("pt-BR").trim();const filtered=rows.filter(x=>[x.code,x.label,x.model,x.brand,x.location_text].join(" ").toLocaleLowerCase("pt-BR").includes(q));host.innerHTML=filtered.length?filtered.map(x=>`<button type="button" class="withdrawal-pick-item" data-pick="${esc(x.id)}"><span>${uiIcon("equipment",21)}</span><span><strong>${esc(x.label||x.code)}</strong><small>${esc(x.code)} · ${esc(x.brand||"")} ${esc(x.model||"")}${x.location_text?` · ${esc(x.location_text)}`:""}</small></span>${uiIcon("arrow",17)}</button>`).join(""):`<div class="empty"><strong>Nenhum equipamento disponível encontrado.</strong><span>Confira o inventário ou tente outra busca.</span></div>`;qsa("[data-pick]",host).forEach(b=>b.addEventListener("click",()=>{const selected=rows.find(x=>x.id===b.dataset.pick);m.remove();if(selected)openCheckoutModal([selected]);}));};
+  qs("#withdrawal-pick-search",m)?.addEventListener("input",render);render();
 }
 async function loadWithdrawals() {
+  const host=qs("#withdrawals");if(!host)return;
   const {data,error}=await supabase.rpc("home_withdrawals",{p_query:null});
-  const h=qs("#withdrawals"); if(!h) return;
-  if(error){ h.innerHTML=`<div class="empty"><strong>Erro ao carregar.</strong><span>${esc(errText(error))}</span></div>`; return; }
-  let rows = data || [];
+  if(!host.isConnected)return;
+  if(error){host.innerHTML=`<div class="empty"><strong>Não foi possível carregar as retiradas.</strong><span>${esc(errText(error))}</span><button type="button" class="button" id="withdrawal-retry">Tentar novamente</button></div>`;qs("#withdrawal-retry")?.addEventListener("click",loadWithdrawals);return;}
+  let rows=data||[];
   const ids=[...new Set(rows.map(r=>r.withdrawal_id).filter(Boolean))].slice(0,200);
   if(ids.length){
-    const times=await supabase.from("withdrawals").select("id,due_at").in("id",ids);
-    if(!times.error)state.withdrawalsDue=new Map((times.data||[]).map(x=>[String(x.id),x.due_at]));
+    const extra=await supabase.from("withdrawals").select("id,due_at,checkout_purpose,purpose_details,custodian_name,custodian_role,custody_mode,recorded_by_name,recorded_by_role,student_name").in("id",ids);
+    if(!host.isConnected)return;
+    if(extra.error){host.innerHTML=`<div class="empty"><strong>Informações da retirada indisponíveis.</strong><span>${esc(errText(extra.error))}</span><button class="button" type="button" id="withdrawal-retry">Tentar novamente</button></div>`;qs("#withdrawal-retry")?.addEventListener("click",loadWithdrawals);return;}
+    const byId=new Map((extra.data||[]).map(x=>[String(x.id),x]));
+    rows=rows.map(r=>({...r,...byId.get(String(r.withdrawal_id))}));
   }
-  rows=rows.map(r=>({...r,due_at:state.withdrawalsDue.get(String(r.withdrawal_id))||null}));
-  rows = smartFilter(rows, state.withdrawalsSearch, r => [r.class_name, r.destination, r.responsible_name, r.student_name, r.status, statusLabel(r.status)]);
-  if (state.withdrawalsStatus==="overdue") rows=rows.filter(r=>r.status==="open"&&r.due_at&&new Date(r.due_at)<new Date());
-  else if(state.withdrawalsStatus) rows = rows.filter(r => r.status === state.withdrawalsStatus);
-  h.innerHTML = renderWithdrawalRows(rows);
-  qsa("[data-withdrawal-id]",h).forEach(b=>b.addEventListener("click",()=>openWithdrawalDetail(b.dataset.withdrawalId)));
+  const overview=qs("#withdrawal-overview");if(overview){
+    const open=rows.filter(r=>r.status==="open").length;
+    const overdue=rows.filter(r=>withdrawalStatus(r)==="overdue").length;
+    overview.innerHTML=`<span><strong>${open}</strong> em uso</span><span class="${overdue?'has-overdue':''}"><strong>${overdue}</strong> atrasadas</span><span><strong>${rows.length}</strong> registros exibidos</span>`;
+  }
+  const query=state.withdrawalsSearch;
+  rows=smartFilter(rows,query,r=>[r.class_name,r.destination,r.responsible_name,r.student_name,r.custodian_name,r.recorded_by_name,r.checkout_purpose,withdrawalPurposeLabel(r.checkout_purpose),r.purpose_details,r.status,statusLabel(r.status)]);
+  if(state.withdrawalsStatus==="overdue")rows=rows.filter(r=>withdrawalStatus(r)==="overdue");
+  else if(state.withdrawalsStatus==="open")rows=rows.filter(r=>r.status==="open");
+  else if(state.withdrawalsStatus)rows=rows.filter(r=>r.status===state.withdrawalsStatus);
+  rows.sort((a,b)=>state.withdrawalsSort==="due"?(new Date(a.due_at||"9999-12-31").getTime()-new Date(b.due_at||"9999-12-31").getTime()):new Date(b.withdrawn_at).getTime()-new Date(a.withdrawn_at).getTime());
+  host.innerHTML=renderWithdrawalRows(rows);
+  qsa("[data-withdrawal-id]",host).forEach(b=>b.addEventListener("click",()=>openWithdrawalDetail(b.dataset.withdrawalId)));
 }
-function renderWithdrawalRows(rows) { if(!rows.length)return `<div class="empty"><strong>Nenhuma retirada encontrada.</strong><span>As movimentações compatíveis com seu perfil aparecem aqui.</span></div>`;return `<div class="data-list">${rows.map(r=>`<button class="data-row" type="button" data-withdrawal-id="${esc(r.withdrawal_id)}"><div class="data-main"><strong>${esc(r.class_name||"Sem turma")} · ${esc(r.destination||"Sem destino")}</strong><span>${esc(r.responsible_name||"")}${r.student_name?` · Aluno: ${esc(r.student_name)}`:""} · ${Number(r.pending_count||0)} pendente(s) de ${Number(r.total_count||0)}${r.due_at?` · Previsão: ${esc(dt(r.due_at))}`:""}</span></div><span class="status status-${r.status==="open"&&r.due_at&&new Date(r.due_at)<new Date()?"maintenance":esc(r.status)}">${r.status==="open"&&r.due_at&&new Date(r.due_at)<new Date()?"Atrasada":esc(statusLabel(r.status))}</span><span class="data-date">${r.returned_at?`Devolvido ${esc(dt(r.returned_at))}`:esc(dt(r.withdrawn_at))}</span></button>`).join("")}</div>`; }
+function renderWithdrawalRows(rows) {
+  if(!rows.length)return `<div class="withdrawal-empty"><span>${uiIcon("inbox",36)}</span><strong>Nenhuma retirada com esses filtros.</strong><p>Tente outra busca ou registre uma nova retirada.</p></div>`;
+  return `<div class="withdrawal-list">${rows.map(r=>{
+    const status=withdrawalStatus(r),info=withdrawalSummary(r),n=Number(r.total_count||0),pending=Number(r.pending_count||0);
+    const statusText=status==="overdue"?"Atrasada":status==="open"?"Em aberto":statusLabel(status);
+    const badgeClass=status==="overdue"?"late":status==="returned"?"returned":"open";
+    return `<button class="withdrawal-card ${badgeClass}" type="button" data-withdrawal-id="${esc(r.withdrawal_id)}"><span class="withdrawal-card-top"><strong>${esc(r.class_name||"Turma não informada")}</strong><span class="withdrawal-card-status ${badgeClass}">${esc(statusText)}</span></span><span class="withdrawal-card-details"><span><small>COM QUEM</small><b>${esc(info.receiver)}${esc(info.receiverRole)}</b>${r.custody_mode==="delegate"?'<em>Nome informado pelo registrador</em>':r.custody_mode==="self"?'<em>Conta autenticada</em>':""}</span><span><small>DESTINO</small><b>${esc(r.destination||"Não informado")}</b></span><span><small>MOTIVO</small><b>${esc(info.reason)}</b></span></span><span class="withdrawal-card-foot"><span>${uiIcon("equipment",17)} ${pending} de ${n} pendente${pending===1?"":"s"}</span><span>${uiIcon("calendar",17)} ${esc(r.returned_at?`Devolvida ${dt(r.returned_at)}`:r.due_at?`Até ${dt(r.due_at)}`:`Retirada ${dt(r.withdrawn_at)}`)}</span>${uiIcon("arrow",17)}</span></button>`;
+  }).join("")}</div>`;
+}
 async function openWithdrawalDetail(withdrawalId) {
-  const [{data:w,error:we},{data:items,error:ie}] = await Promise.all([
-    supabase.from("withdrawals").select("id,class_name,destination,responsible_name,student_name,status,withdrawn_at,returned_at,due_at").eq("id",withdrawalId).single(),
+  const [{data:w,error:we},{data:items,error:ie}]=await Promise.all([
+    supabase.from("withdrawals").select("id,class_name,destination,responsible_name,student_name,status,withdrawn_at,returned_at,due_at,checkout_purpose,purpose_details,custodian_name,custodian_role,custody_mode,recorded_by_name,recorded_by_role").eq("id",withdrawalId).single(),
     supabase.from("withdrawal_items").select("id,equipment_id,created_at,returned_at,return_condition,equipments(id,code,label,brand,model,school_group)").eq("withdrawal_id",withdrawalId).order("id")
   ]);
-  if (we || ie) return notify(errText(we || ie),"error");
-  const pending = (items || []).filter(x => !x.returned_at);
-  const m = makeModal(`<div class="panel-head"><div><span class="eyebrow">Retirada ${esc(withdrawalId)}</span><h2>${esc(w.class_name || "Sem turma")} · ${esc(w.destination || "Sem destino")}</h2></div><button class="icon-button" data-close>×</button></div>
-    <div class="modal-body"><div class="withdrawal-meta">${detail("Responsável",w.responsible_name)}${detail("Aluno",w.student_name)}${detail("Retirada",dt(w.withdrawn_at))}${detail("Previsão",dt(w.due_at))}${detail("Encerramento",dt(w.returned_at))}</div>
-    <p class="muted">Confira cada equipamento. Avaria abre manutenção; não localizado continua pendente até a conferência.</p>
-    <div class="return-list">${(items || []).map(i => `<div class="return-item"><div><strong>${esc(i.equipments?.label||i.equipments?.code||"Equipamento")}</strong><span>${esc(schoolGroupLabel(i.equipments?.school_group))} · ${esc(i.equipments?.code||"")}</span></div>
-      ${i.returned_at ? `<span class="return-date">${i.return_condition==='damaged'?'Avaria registrada':'Devolvido'} em ${esc(dt(i.returned_at))}</span>` : `<label class="return-choice">Situação<select data-return-equipment="${esc(i.equipment_id)}"><option value="pending" ${i.return_condition!=='missing'?'selected':''}>Pendente</option><option value="returned">Devolvido normalmente</option><option value="damaged">Devolvido com avaria</option><option value="missing" ${i.return_condition==='missing'?'selected':''}>Não localizado</option></select></label>`}</div>`).join("")}</div>
-    ${pending.length ? `<div class="modal-actions"><button class="button" type="button" data-close>Voltar</button><button class="button primary" id="return-batch">Confirmar conferência</button></div>`:'<p class="muted">Todos os itens desta retirada foram conferidos.</p>'}
-    </div>`,true);
+  if(we||ie)return notify(errText(we||ie),"error");
+  const pending=(items||[]).filter(x=>!x.returned_at);
+  const received=w.custodian_name||w.responsible_name||"Não identificado";
+  const actor=w.recorded_by_name||w.responsible_name||"Conta não identificada";
+  const actorRole=w.recorded_by_role?` · ${withdrawalRoleLabel(w.recorded_by_role)}`:"";
+  const m=makeModal(`<div class="panel-head"><div><span class="eyebrow">Retirada ${esc(withdrawalId)}</span><h2>${esc(w.class_name||"Sem turma")} · ${esc(w.destination||"Sem destino")}</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div>
+  <div class="modal-body"><section class="withdrawal-detail-person"><span>${uiIcon("admin",23)}</span><div><small>Quem está com o equipamento</small><strong>${esc(received)}${w.custodian_role?` · ${esc(withdrawalRoleLabel(w.custodian_role))}`:""}</strong><small>${w.custody_mode==="delegate"?"Identidade declarada por quem registrou; não validada por login":w.custody_mode==="self"?"Recebedor identificado pela conta autenticada":"Recebedor não identificado separadamente neste registro antigo"}</small></div></section>
+  <div class="withdrawal-detail-grid">${detail("Registrado por",actor+actorRole)}${detail("Turma ou setor",w.class_name)}${detail("Local de destino",w.destination)}${detail("Motivo",withdrawalPurposeLabel(w.checkout_purpose))}${w.purpose_details?detail("Detalhes da finalidade",w.purpose_details):""}${detail("Data da retirada",dt(w.withdrawn_at))}${detail("Previsão de devolução",dt(w.due_at))}${w.returned_at?detail("Devolvida em",dt(w.returned_at)):""}</div>
+  <h3 class="withdrawal-items-title">Equipamentos (${items?.length||0})</h3><p class="muted">Confira os itens individualmente. Os não localizados permanecem pendentes até a conferência.</p>
+  <div class="return-list">${(items||[]).map(i=>`<div class="return-item"><div><strong>${esc(i.equipments?.label||i.equipments?.code||"Equipamento")}</strong><span>${esc(schoolGroupLabel(i.equipments?.school_group))} · ${esc(i.equipments?.code||"")}</span></div>${i.returned_at?`<span class="return-date">${i.return_condition==='damaged'?'Avaria registrada':'Devolvido'} em ${esc(dt(i.returned_at))}</span>`:`<label class="return-choice">Situação<select data-return-equipment="${esc(i.equipment_id)}"><option value="pending" ${i.return_condition!=='missing'?'selected':''}>Pendente</option><option value="returned">Devolvido normalmente</option><option value="damaged">Devolvido com avaria</option><option value="missing" ${i.return_condition==='missing'?'selected':''}>Não localizado</option></select></label>`}</div>`).join("")}</div>
+  ${pending.length?`<div class="modal-actions"><button class="button" type="button" data-close>Voltar</button><button class="button primary" id="return-batch">Confirmar conferência</button></div>`:'<p class="muted">Todos os itens desta retirada foram conferidos.</p>'}</div>`,true);
   const action=uid();
   qs("#return-batch",m)?.addEventListener("click",async()=>{
     const entries=qsa("[data-return-equipment]",m).map(sel=>({equipment_id:sel.dataset.returnEquipment,condition:sel.value}));
-    if (!entries.some(x=>x.condition!=='pending')) return notify("Selecione ao menos uma devolução, avaria ou item não localizado.","warning");
+    if(!entries.some(x=>x.condition!=="pending"))return notify("Selecione ao menos uma devolução, avaria ou item não localizado.","warning");
     const button=qs("#return-batch",m);setBusy(button,true,"Registrando…");
     const {data,error}=await supabase.rpc("equipa_return_items",{p_withdrawal_id:Number(withdrawalId),p_items:entries,p_client_action_id:action});setBusy(button,false);
     if(error)return notify(errText(error),"error");
@@ -1056,8 +1167,6 @@ async function openWithdrawalDetail(withdrawalId) {
     m.remove();await loadWithdrawals();openWithdrawalDetail(withdrawalId);
   });
 }
-
-
 async function renderReservations() {
   state.view = "reservations";
   shell(`<section class="panel workspace-panel"><div class="panel-head workspace-head"><div><span class="eyebrow">Agenda</span><h2>Reservas</h2><p>Solicite equipamentos por quantidade, confira datas e faça o check-in antes da retirada.</p></div><button class="button primary" id="new-quantity-booking">Nova reserva</button></div>
@@ -1105,9 +1214,9 @@ async function loadBookingSummary() {
     if(error)return notify(errText(error),"error");notify("Check-in registrado.","success");loadBookingSummary();
   }));
   qsa("[data-book-checkout]",host).forEach(b=>b.addEventListener("click",async()=>{
-    const ok=await confirmAction({title:"Confirmar retirada?",message:"Todos os equipamentos deste horário serão registrados numa única retirada, com previsão de devolução.",confirmText:"Registrar retirada"});if(!ok)return;
-    setBusy(b,true,"Retirando…");const {error}=await supabase.rpc("equipa_checkout_booking",{p_reservation_id:Number(b.dataset.bookCheckout),p_client_action_id:uid()});setBusy(b,false);
-    if(error)return notify(errText(error),"error");notify("Retirada registrada.","success");navigate("withdrawals");
+    const booking=rows.find(x=>String(x.id)===b.dataset.bookCheckout);
+    if(!booking)return notify("Reserva não encontrada nesta página.","error");
+    openBookingCustodyModal(Number(b.dataset.bookCheckout),booking);
   }));
   qsa("[data-book-cancel]",host).forEach(b=>b.addEventListener("click",()=>openBookingCancellation(Number(b.dataset.bookCancel),b.dataset.recurring==="true")));
 }
