@@ -1,66 +1,134 @@
+<div align="center">
+
 # Equipa
 
-Sistema web para controle de equipamentos escolares, com Supabase (autenticação, PostgreSQL e RLS) e frontend estático para GitHub Pages.
+**Gestão responsável de equipamentos escolares.**
 
-**Versão: 0.2.6 Alpha.** Interface para desktop e celular.
+![Versão](https://img.shields.io/badge/vers%C3%A3o-0.2.1.2--alpha-5d666d?style=for-the-badge)
+![Plataforma](https://img.shields.io/badge/plataforma-web-69737a?style=for-the-badge)
+![Estado](https://img.shields.io/badge/estado-alpha%20em%20testes-78838a?style=for-the-badge)
+![Privacidade](https://img.shields.io/badge/privacidade-LGPD-626d74?style=for-the-badge)
+
+</div>
+
+---
+
+O **Equipa** é uma plataforma web criada para organizar o uso de equipamentos de uma unidade escolar. O sistema reúne inventário, QR Codes, carrinhos, retiradas, devoluções, reservas, manutenção, administração e auditoria em um único ambiente.
+
+A proposta é permitir que a equipe escolar saiba **qual equipamento está disponível, quem realizou uma retirada, quando ocorreu a devolução e qual é o histórico do patrimônio**, mantendo rastreabilidade sem transformar a rotina em uma planilha interminável.
 
 ## Funções
 
 ```text
-Inventário de equipamentos com QR Code permanente
-Identificação de computadores disponíveis, em uso, atrasados ou em manutenção
-Retirada individual e em lote com responsável, recebedor, destino, finalidade e prazo
-Devolução e conferência individual dos itens
-Histórico de movimentações, registros de manutenção e auditoria
-Movimentações recentes em linha do tempo no celular
-Busca contextual e preenchimento assistido com resultados autorizados ao perfil
-Tema escuro e claro para as telas principais, formulários, modais e filtros
-Administração de usuários e equipamentos, com regras de acesso no servidor
+Inventário de equipamentos
+Grupos e identificação por tipo de dispositivo
+Pesquisa inteligente e filtros
+QR Code permanente por equipamento
+QR Code por carrinho
+Leitura de QR pelo celular
+Download de QR Codes em lote
+Retirada individual com prazo de devolução
+Retirada seletiva por carrinho
+Devolução com data e horário
+Fila de retiradas atrasadas
+Exclusão segura de cadastros sem histórico
+Retirada de circulação de equipamento com histórico
+Reservas futuras
+Reserva por quantidade e recorrência semanal limitada
+Check-in e expiração sem apagar histórico
+Devolução em lote com conferência de avarias e pendências
+Relatórios operacionais agregados
+Histórico por equipamento, pessoa e turma
+Controle de manutenção
+Cadastro individual, em lote e importação CSV, XLSX ou DOCX estruturado
+Modelos técnicos reutilizáveis com processador, RAM, armazenamento e sistema operacional
+Prévia editável e detecção de duplicados antes da confirmação
+Cadastro transacional de até 200 equipamentos por confirmação
+Etiquetas QR permanentes em PDF por seleção, localização ou inventário
+Exportação de inventário
+Aprovação e controle de acesso de usuários
+Banimento e restauração de acesso
+Auditoria administrativa
+Paginação e busca administrativa no servidor
+Relatórios e gráficos agregados no PostgreSQL
+Termos de Uso versionados
+Política de Privacidade versionada
+Registro de aceite dos documentos legais
+Interface adaptada para desktop e celular
 ```
 
-## Alterações da 0.2.6
+## Equipamentos
 
-No celular, a barra superior apresenta somente busca global e notificações, sem botão de menu lateral e sem o nome duplicado junto da pesquisa. As opções secundárias, sair e alternar o tema estão no menu **Mais** da barra inferior. O cartão de boas-vindas na tela Início usa a paleta azul de Retiradas. O modo escuro foi revisado em todas as abas, incluindo campos, dropdowns, filtros, tabelas e janelas; a busca continua disponível na aba Retiradas.
+O Equipa foi preparado para o inventário utilizado pela escola, incluindo:
 
-Este hotfix modifica somente o frontend. Nenhuma nova migration nem modificação no Supabase são necessárias. Consulte `RELEASE-0.2.6.md`.
+```text
+Chromebook
+Positivo novo
+Positivo técnico
+Positivo antigo
+ThinkPad Lenovo
+Tablet
+Outros equipamentos
+```
 
-## Alterações da 0.2.5
+Cada equipamento pode possuir número/código, patrimônio, grupo, fabricante, modelo, nome, número de série, localização, estado e observações operacionais.
 
-As buscas em Equipamentos e Retiradas atualizam somente os resultados, sem reconstruir a aba nem derrubar o foco do teclado. Nas buscas de Carrinhos e Manutenção, a página só é atualizada ao confirmar com Enter ou sair do campo, para impedir telas de carregamento durante a digitação. Histórico, Auditoria e Usuários usam atraso maior entre consultas. As sugestões continuam disponíveis, sem escolher automaticamente a primeira opção ao pressionar Enter.
+## Carrinhos
 
-A previsão de devolução vem preenchida com a **data atual da escola às 21h15**. São Paulo é a referência de horário. Quando o prazo de hoje já não é válido, é necessário escolher outra data; o horário máximo de qualquer data continua sendo 21h15. Uma trigger do banco também rejeita previsões posteriores ao limite, inclusive fora do formulário.
+Os carrinhos representam conjuntos físicos de equipamentos. Cada carrinho pode registrar nome, número, localização, capacidade, observações e os equipamentos vinculados.
 
-A área de notificações mostra registros recentes de retirada e devolução, atualizando enquanto o site está aberto, a cada 45 segundos (não é notificação nativa do aparelho). Alunos com conta escolar ativa podem consultar, na lista de equipamentos em uso, o nome da pessoa em posse, com indicação de identidade declarada quando pertinente; não são expostos e-mail, RA ou data de nascimento de terceiros.
+Ao ler o QR de um carrinho, o usuário pode escolher **quais equipamentos serão retirados e quantos serão selecionados**, sem obrigar a retirada do lote inteiro.
 
-Todas as janelas do sistema possuem botão de fechar vermelho, acessível por toque ou mouse; filtros mobile, notificações, scanner e menu adicional recebem controles visíveis também no tema escuro.
+## Segurança e privacidade
 
-O Supabase do projeto `oxcfbsrukzfnzkivatsn` **já recebeu** a migration `20260921050807_equipa_0_2_5_school_cutoff_activity.sql`. Não a execute novamente nesse projeto. Os dados existentes foram mantidos. Consulte `RELEASE-0.2.5.md`.
+O Equipa adota autenticação individual, níveis de acesso, aprovação administrativa de novas contas, regras de acesso no banco de dados, auditoria e operações administrativas protegidas no servidor.
 
-## Alterações da 0.2.4
+A chave presente no navegador possui apenas permissões públicas controladas. Credenciais administrativas e segredos de servidor não fazem parte dos arquivos públicos do site.
 
-Removidos os títulos, ícones grandes, descrições e trilhas de navegação redundantes do topo das abas Equipamentos, Retiradas, Histórico, Carrinhos, Manutenção, Relatórios, Auditoria e Administração, no desktop e no celular. A posição atual continua indicada pela navegação selecionada. A saudação pessoal e os títulos de seções que identificam dados úteis permanecem. Os títulos das páginas são preservados para leitores de tela por cabeçalhos visualmente ocultos e por `aria-label` no conteúdo principal.
+Os QR Codes funcionam como identificadores e não concedem, por si só, autorização para retirar ou alterar equipamentos. A execução de operações continua dependendo da conta autenticada e de suas permissões.
 
-As ações de cada aba foram mantidas, incluindo cadastrar equipamento, nova retirada, novo carrinho e exportar relatório. Os botões de ação no celular compartilham o mesmo azul da tela de retiradas, inclusive a ação de leitura QR na barra inferior; botões de status de alerta ou manutenção mantêm as cores semânticas. O modo escuro utiliza a mesma paleta de ação, com contrastes específicos para fundos escuros.
+O tratamento de dados foi pensado segundo princípios da LGPD, incluindo finalidade, necessidade, minimização, segurança, transparência, rastreabilidade e preservação dos direitos dos titulares.
 
-Esta atualização é **apenas do frontend**: não modifica o banco, as migrations, os QR Codes nem os dados operacionais. Publique os arquivos do pacote para disponibilizar a nova interface; consulte `RELEASE-0.2.4.md`.
+## Perfis
 
-## Alterações da 0.2.3
+```text
+Aluno
+Professor
+Administrador
+```
 
-A tela **Retiradas** agora mostra o inventário operacional, incluindo equipamentos *em uso* e *não em uso*. A tabela desktop e os cartões mobile distinguem quem registrou de quem recebeu a máquina; o status destaca OK, atenção e problema. O painel móvel apresenta as movimentações recentes na forma de uma jornada: retirada registrada → com responsável → devolução prevista, atrasada ou concluída. Os horários indicados como previstos não são apresentados como eventos já ocorridos.
+Contas novas podem permanecer aguardando aprovação antes de receber acesso ao inventário. A administração pode ajustar cargos, remover acesso, restaurar contas e aplicar bloqueios quando necessário à segurança ou à rotina escolar.
 
-O fluxo de **novas reservas foi desativado**: não há navegação ou formulários de reserva e as RPCs públicas relacionadas tiveram a execução revogada no Supabase. **A tabela histórica `reservations` e os registros antigos são mantidos** por integridade e rastreabilidade. Não apague a tabela, funções internas, QR Codes ou migrations antigas para economizar espaço.
+## Auditoria
 
-A pesquisa sugere códigos, modelos, turmas, nomes e locais que a conta autenticada pode consultar. A escolha de um perfil conhecido pode preencher seu vínculo no formulário de retirada, mas o recebedor indicado por terceiros continua sendo uma informação declarada, não uma autenticação da pessoa.
+A área de auditoria permite acompanhar eventos relevantes, como alterações no inventário, movimentações, reservas, manutenção, carrinhos, contas e aceites legais. O histórico administrativo é preservado para evitar que a exclusão de um cadastro elimine a rastreabilidade de ações anteriores.
 
-## Publicação
+## Integração com Supabase
 
-1. Faça backup dos dados antes de qualquer alteração futura no banco.
-2. A migration `supabase/migrations/20260921044245_equipa_0_2_3_retire_bookings.sql` **já foi aplicada** ao projeto Supabase `oxcfbsrukzfnzkivatsn`. Não há necessidade de executá-la novamente nesse banco.
-3. Envie os arquivos da raiz deste pacote para a raiz de publicação do seu GitHub Pages, substituindo a versão anterior e mantendo `.nojekyll`.
-4. Confira em celular e desktop: login, estados de uso, busca, retirada, devolução, modo escuro e linha do tempo.
+O projeto Supabase conectado é `oxcfbsrukzfnzkivatsn`. As migrations corretivas 0.2.1 e 0.2.1.1 já foram aplicadas ao projeto, junto do Cron de auditorias. Para publicar no GitHub Pages, consulte `HOTFIX-0.2.1.2-SUPABASE.md`. A tela de login tem o botão **Testar conexão**.
 
-O ZIP é um pacote de **publicação, não uma prova de deploy**. Não houve acesso autenticado para testar os fluxos com contas reais no ambiente publicado. Veja `RELEASE-0.2.6.md` para instruções e limites dos testes.
+## Estado do projeto
 
-## Segurança
+```text
+Nome        Equipa
+Versão      0.2.1.2 Alpha
+Plataforma  Web responsiva
+Uso         Gestão de equipamentos escolares
+Estado      Alpha · testes e piloto restrito
+```
 
-Use somente a chave publicável do Supabase no frontend. Nunca publique chaves secretas ou `service_role`. O servidor valida operações e a RLS limita as informações exibidas. O QR identifica a máquina, mas não autoriza uma retirada sozinho.
+Antes do piloto, consulte `RELATORIO-AUDITORIA-0.2.1.md`, `PILOT-TEST-MATRIX.md` e `supabase/DEPLOY-0.2.1-PILOT.md`.
+
+**Hotfix 0.2.1.1:** leia `HOTFIX-0.2.1.1.md` antes de atualizar o banco. O pacote inclui
+`supabase/DIAGNOSTICO-RECUPERACAO.sql`, `supabase/CALCULO-CAPACIDADE.sql` e
+`supabase/INSTALL-CRON.sql`. As migrations precisam ser executadas no projeto Supabase
+correto depois de backup, e a limpeza automática só funciona com Supabase Cron ativado.
+
+---
+
+<div align="center">
+
+**Equipa**  
+feito pela equipe da coordenação da escola e 3-A do ensino médio.
+
+</div>
