@@ -2,7 +2,7 @@
 
 Sistema web para controle de equipamentos escolares, com Supabase (autenticação, PostgreSQL e RLS) e frontend estático para GitHub Pages.
 
-**Versão: 0.2.3 Alpha.** Interface para desktop e celular.
+**Versão: 0.2.4 Alpha.** Interface para desktop e celular.
 
 ## Funções
 
@@ -17,6 +17,14 @@ Busca contextual e preenchimento assistido com resultados autorizados ao perfil
 Tema escuro e claro para as telas principais, formulários, modais e filtros
 Administração de usuários e equipamentos, com regras de acesso no servidor
 ```
+
+## Alterações da 0.2.4
+
+Removidos os títulos, ícones grandes, descrições e trilhas de navegação redundantes do topo das abas Equipamentos, Retiradas, Histórico, Carrinhos, Manutenção, Relatórios, Auditoria e Administração, no desktop e no celular. A posição atual continua indicada pela navegação selecionada. A saudação pessoal e os títulos de seções que identificam dados úteis permanecem. Os títulos das páginas são preservados para leitores de tela por cabeçalhos visualmente ocultos e por `aria-label` no conteúdo principal.
+
+As ações de cada aba foram mantidas, incluindo cadastrar equipamento, nova retirada, novo carrinho e exportar relatório. Os botões de ação no celular compartilham o mesmo azul da tela de retiradas, inclusive a ação de leitura QR na barra inferior; botões de status de alerta ou manutenção mantêm as cores semânticas. O modo escuro utiliza a mesma paleta de ação, com contrastes específicos para fundos escuros.
+
+Esta atualização é **apenas do frontend**: não modifica o banco, as migrations, os QR Codes nem os dados operacionais. Publique os arquivos do pacote para disponibilizar a nova interface; consulte `RELEASE-0.2.4.md`.
 
 ## Alterações da 0.2.3
 
@@ -33,7 +41,7 @@ A pesquisa sugere códigos, modelos, turmas, nomes e locais que a conta autentic
 3. Envie os arquivos da raiz deste pacote para a raiz de publicação do seu GitHub Pages, substituindo a versão anterior e mantendo `.nojekyll`.
 4. Confira em celular e desktop: login, estados de uso, busca, retirada, devolução, modo escuro e linha do tempo.
 
-O ZIP é um pacote de **publicação, não uma prova de deploy**. Não houve acesso autenticado para testar os fluxos com contas reais no ambiente publicado. Veja `RELEASE-0.2.3.md` para instruções e limites dos testes.
+O ZIP é um pacote de **publicação, não uma prova de deploy**. Não houve acesso autenticado para testar os fluxos com contas reais no ambiente publicado. Veja `RELEASE-0.2.4.md` para instruções e limites dos testes.
 
 ## Segurança
 

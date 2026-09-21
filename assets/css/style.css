@@ -1439,3 +1439,53 @@ html[data-theme="dark"] .mobile-health-ring::before{background:#14283f!important
 html[data-theme="dark"] .mobile-home-greeting span,html[data-theme="dark"] .mobile-home-eyebrow{color:#c5d8f2!important}
 html[data-theme="dark"] .mobile-flow-section+.mobile-flow-section{border-top-color:var(--line)!important}
 html[data-theme="dark"] .mobile-stat-pill{border-right-color:var(--line)!important}
+
+/* Equipa 0.2.4 | Headings belong to navigation; page space belongs to controls. */
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+:root{--equipa-action:#2864d9;--equipa-action-hover:#1953c0;--equipa-action-soft:#eaf1ff;--equipa-action-text:#1d57c3}
+html[data-theme="dark"]{--equipa-action:#2269df;--equipa-action-hover:#3983f5;--equipa-action-soft:#214773;--equipa-action-text:#a3cdff}
+.content .ref-page-heading.compact-page-actions{display:flex!important;align-items:center!important;justify-content:flex-end!important;padding:0!important;margin:0 0 12px!important;min-height:0!important;gap:0!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.content .ref-page-heading.compact-page-actions:has(.ref-heading-actions:empty){display:none!important}
+.content .ref-page-heading.compact-page-actions .ref-heading-actions{justify-content:flex-end!important}
+.content .operations-page .ops-heading.ops-heading-compact{display:flex!important;justify-content:flex-end!important;align-items:center!important;min-height:0!important;padding:0!important;margin:0 0 12px!important;background:transparent!important;border:0!important;box-shadow:none!important}
+.compact-workspace-actions{display:flex;justify-content:flex-end;align-items:center;min-height:0;gap:8px;padding:12px 22px 0}
+.compact-workspace-actions:has(> .visually-hidden:only-child){display:none!important}
+.content .workspace-panel>.workspace-toolbar{padding-top:14px}
+.content .ref-welcome-main .ref-welcome-title{margin-top:0}
+/* Navigation indicates location; don't repeat a large page title in the topbar. */
+.topbar .mobile-top-name>strong{display:none!important}
+@media(min-width:821px){
+ .app-shell .main .topbar{grid-template-columns:minmax(0,1fr) auto!important;gap:16px!important}
+ .main .topbar .topbar-greeting{display:none!important}
+ .main .topbar .global-search{grid-column:1;justify-self:start;width:min(660px,100%);max-width:100%}
+ .main .topbar .topbar-right{grid-column:2;justify-self:end}
+}
+@media(max-width:820px){
+ .main .topbar .mobile-top-name .topbar-kicker{font-size:17px!important;font-weight:850!important;letter-spacing:-.035em!important;text-transform:none!important;margin:0!important;color:var(--ink)!important}
+ .content .ref-page-heading.compact-page-actions{margin-bottom:10px!important;gap:0!important}
+ .content .ref-page-heading.compact-page-actions .ref-heading-actions{width:100%!important}
+ .content .operations-page .ops-heading.ops-heading-compact{display:none!important}
+ .content .compact-workspace-actions{padding:0 0 12px!important}
+ .content .compact-workspace-actions .button{width:100%}
+ .content .workspace-panel>.workspace-toolbar{padding-top:0!important}
+ /* An operation always uses the withdrawals accent, regardless of which page hosts it. */
+ .button.primary,.ref-primary-action,.ref-dark-action,.withdrawal-mobile-cta,.ops-create,.dashboard-main-action{background:var(--equipa-action)!important;background-image:none!important;border-color:var(--equipa-action)!important;color:#fff!important;box-shadow:0 4px 12px rgba(35,92,191,.14)!important}
+ .button.primary:hover:not(:disabled),.ref-primary-action:hover:not(:disabled),.ref-dark-action:hover:not(:disabled),.withdrawal-mobile-cta:hover:not(:disabled){background:var(--equipa-action-hover)!important;border-color:var(--equipa-action-hover)!important;color:#fff!important}
+ .mobile-tabbar .mobile-qr-action>span{background:var(--equipa-action)!important;color:#fff!important;box-shadow:0 4px 12px rgba(35,92,191,.16)!important}
+ .mobile-tabbar .mobile-qr-action small{color:var(--equipa-action-text)!important}
+ .mobile-tabbar .mobile-nav-item.active{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important}
+ .mobile-more-list .nav-button.active{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important;border-color:var(--equipa-action)!important}
+ .mobile-more-list .nav-symbol{color:var(--equipa-action-text)!important}
+ .mobile-shortcut-flow button>span,.mobile-stat-pill:not(.attention) .mobile-stat-icon,.mobile-empty-state>span{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important}
+ .ref-action.ref-action-blue,.ref-action.ref-action-green,.ref-action.ref-action-purple,.ref-action.ref-action-orange{background:var(--surface)!important;border-color:var(--line)!important;color:var(--ink)!important}
+ .ref-action.ref-action-blue>span,.ref-action.ref-action-green>span,.ref-action.ref-action-purple>span,.ref-action.ref-action-orange>span{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important}
+ .ref-action strong,.ref-action>.ui-icon{color:var(--ink)!important}
+ .ea-stat>button,.ref-display-button.active,.ref-filter-action[aria-expanded="true"],.filter-button.active{background:var(--equipa-action-soft)!important;color:var(--equipa-action-text)!important;border-color:var(--equipa-action-soft)!important}
+ .ref-outline-action,.ref-filter-action,.filter-button:not(.active),.ref-display-button:not(.active){background:var(--surface)!important;border-color:var(--line)!important;color:var(--ink)!important}
+ .ops-quick-tabs button.selected{background:var(--equipa-action-soft)!important;border-color:var(--equipa-action)!important;color:var(--equipa-action-text)!important}
+ /* Status/warnings remain semantic: maintenance and delayed equipment must remain visually distinct. */
+ .mobile-stat-pill.attention .mobile-stat-icon{background:#fff0f1!important;color:#d32f3f!important}
+ html[data-theme="dark"] .mobile-stat-pill.attention .mobile-stat-icon{background:#512933!important;color:#ffa6aa!important}
+ html[data-theme="dark"] .main .topbar .mobile-top-name .topbar-kicker{color:var(--ink)!important}
+ html[data-theme="dark"] .mobile-tabbar .mobile-qr-action>span{background:var(--equipa-action)!important;color:#fff!important}
+}
