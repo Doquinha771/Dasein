@@ -35,6 +35,7 @@ const state = {
   cartSearch: "",
   cartPage: 0,
   historyFiltersOpen: false,
+  historySearch: "",
   auditSearch: "",
   auditAction: "",
   auditEntity: "",
@@ -242,8 +243,9 @@ async function showConnectionStatus() {
   // Uma transição de login pode remover a tela enquanto o teste acontece.
   const visibleTargets = [qs("#supabase-connection"), qs("#startup-connection")].filter(Boolean);
   visibleTargets.forEach(node => {
-    node.dataset.state = info.ok ? "connected" : info.status;
-    node.textContent = info.ok ? "Supabase conectado · Projeto " + info.project
+    node.dataset.state = info.status === "login_required" ? "login_required" : info.ok ? "connected" : info.status;
+    node.textContent = info.status === "login_required" ? info.detail
+      : info.ok ? "Supabase conectado · Projeto " + info.project
       : info.detail + " (" + info.code + ")";
   });
 }
@@ -490,9 +492,15 @@ function shell(content) {
   },{signal:equipaShellAbort.signal});
   qsa("#mobile-more-backdrop [data-view]").forEach(b => b.addEventListener("click", closeMobileMore));
   setupSmartInputs(app);
+  const globalSearchInput=qs("#global-search");
+  globalSearchInput?.addEventListener("input", e=>{
+    if(!mobilePrincipalSearchActive())return;
+    applyMobilePrincipalSearch(e.target.value);
+  });
   qs("#global-search-form")?.addEventListener("submit", e => {
     e.preventDefault();
-    const term = qs("#global-search")?.value.trim() || "";
+    const term = globalSearchInput?.value.trim() || "";
+    if(mobilePrincipalSearchActive())return applyMobilePrincipalSearch(term,{commit:true});
     if (!term) return;
     runSmartGlobalSearch(term);
   });
@@ -879,7 +887,42 @@ function wireFilterToggle(toggleId, panelId) {
   qs(".filter-sheet-close",panel)?.addEventListener("click",()=>setOpen(false));
   panel.querySelectorAll("[id$='filter-apply'],[id$='filter-clear'],#history-filter,#history-filter-clear,#audit-apply,#audit-clear").forEach(x=>x.addEventListener("click",()=>setOpen(false)));
 }
-function currentGlobalSearchValue() { return ({ equipment: state.equipmentSearch, withdrawals: state.withdrawalsSearch, maintenance: state.maintenanceSearch, carts: state.cartSearch })[state.view] || ""; }
+function currentGlobalSearchValue() { return ({
+  equipment: state.equipmentSearch,
+  withdrawals: state.withdrawalsSearch,
+  history: state.historySearch,
+  maintenance: state.maintenanceSearch,
+  carts: state.cartSearch,
+  audit: state.auditSearch,
+  admin: state.adminUserSearch
+})[state.view] || ""; }
+function mobilePrincipalSearchActive(){ return window.matchMedia?.("(max-width: 820px)")?.matches === true; }
+let mobilePrincipalSearchTimer=0;
+function applyMobilePrincipalSearch(value,{commit=false}={}){
+  const term=cleanSearch(value||"");
+  clearTimeout(mobilePrincipalSearchTimer);
+  const run=()=>{
+    if(state.view==="equipment"){ state.equipmentSearch=term;state.equipmentPage=0;return refreshEquipmentSearch(); }
+    if(state.view==="withdrawals"){ state.withdrawalsSearch=term;return paintOperationalSnapshot(); }
+    if(state.view==="history"){ state.historySearch=term;return loadHistory(term); }
+    if(state.view==="audit"){ state.auditSearch=term;state.auditPage=0;return loadAudit(); }
+    if(state.view==="admin"){ state.adminUserSearch=term;state.adminUserPage=0;return loadAdminUsers(); }
+    if(state.view==="carts"){
+      state.cartSearch=term;state.cartPage=0;
+      if(commit){ const local=qs("#cart-search");if(local){local.value=term;local.dispatchEvent(new Event("change",{bubbles:true}));} }
+      return;
+    }
+    if(state.view==="maintenance"){
+      state.maintenanceSearch=term;
+      if(commit){ const local=qs("#maintenance-search");if(local){local.value=term;local.dispatchEvent(new Event("change",{bubbles:true}));} }
+      return;
+    }
+    if(commit&&term)runSmartGlobalSearch(term);
+  };
+  if(commit)return run();
+  mobilePrincipalSearchTimer=setTimeout(run,220);
+}
+
 function routeFromSearch(query) {
   const q = normalizeSearchText(query);
   if (!q) return "equipment";
@@ -950,9 +993,13 @@ function setupSmartInputs(root=document){
   const kind=input.name==="class_name"||input.id==="h-class"?"Turma":input.name==="destination"||input.id==="equipment-location"?"Local":input.name==="holder_name"||["h-person","h-student"].includes(input.id)?"Pessoa":input.id==="h-equipment"||input.id==="withdrawal-pick-search"?"Equipamento":input.id==="equipment-model-filter"?"Modelo":null;
   bindSmartSearch(input,{kind,onSelect:entry=>{
    if(input.id==="global-search"){
-    if(entry.target==="equipment")state.equipmentSearch=entry.value;
-    if(entry.target==="withdrawals")state.withdrawalsSearch=entry.value;
-    navigate(entry.target||routeFromSearch(entry.value));
+    if(mobilePrincipalSearchActive()){
+      applyMobilePrincipalSearch(entry.value,{commit:true});
+    }else{
+      if(entry.target==="equipment")state.equipmentSearch=entry.value;
+      if(entry.target==="withdrawals")state.withdrawalsSearch=entry.value;
+      navigate(entry.target||routeFromSearch(entry.value));
+    }
    }
    if(input.name==="holder_name"&&entry.kind==="Pessoa"){
     const field=input.closest("form")?.elements.holder_role;
@@ -1332,9 +1379,9 @@ async function renderHistory() {
   wireFilterToggle("history-filter-toggle", "history-filter-panel");
   qs("#history-filter-toggle")?.addEventListener("click", ()=>{ state.historyFiltersOpen = qs("#history-filter-panel")?.classList.contains("open"); });
   qs("#history-filter")?.addEventListener("click", ()=>loadHistory());
-  qs("#history-filter-clear")?.addEventListener("click", ()=>{ ["#h-equipment", "#h-person", "#h-student", "#h-class", "#h-status", "#history-smart"].forEach(sel => { const el = qs(sel); if (el) el.value = ""; }); loadHistory(); });
-  let timer; qs("#history-smart")?.addEventListener("input", e=>{ clearTimeout(timer); timer=setTimeout(()=>loadHistory(e.target.value),420); });
-  await loadHistory();
+  qs("#history-filter-clear")?.addEventListener("click", ()=>{ state.historySearch=""; ["#h-equipment", "#h-person", "#h-student", "#h-class", "#h-status", "#history-smart"].forEach(sel => { const el = qs(sel); if (el) el.value = ""; }); const global=qs("#global-search");if(global&&mobilePrincipalSearchActive())global.value=""; loadHistory(); });
+  let timer; qs("#history-smart")?.addEventListener("input", e=>{ clearTimeout(timer); state.historySearch=e.target.value;timer=setTimeout(()=>loadHistory(e.target.value),420); });
+  await loadHistory(state.historySearch);
 }
 async function loadHistory(smartQuery=""){
   const person=qs("#h-person")?.value.trim()||"";
@@ -1343,7 +1390,7 @@ async function loadHistory(smartQuery=""){
   if(error){h.innerHTML=`<div class="empty"><strong>Erro ao carregar histórico.</strong><span>${esc(errText(error))}</span></div>`;return}
   let rows=data||[];
   if(person)rows=smartFilter(rows,person,x=>[x.student_name,x.responsible_name]);
-  rows=smartFilter(rows, smartQuery || qs("#history-smart")?.value || "", x=>[x.label,x.code,x.brand,x.model,x.class_name,x.destination,x.student_name,x.responsible_name,x.status,statusLabel(x.status)]);
+  rows=smartFilter(rows, smartQuery || state.historySearch || qs("#history-smart")?.value || "", x=>[x.label,x.code,x.brand,x.model,x.class_name,x.destination,x.student_name,x.responsible_name,x.status,statusLabel(x.status)]);
   if(!rows.length){h.innerHTML=`<div class="empty"><strong>Nenhum evento.</strong><span>Altere os filtros ou aguarde novas movimentações.</span></div>`;return}
   h.innerHTML=`<div class="data-list">${rows.map(x=>`<div class="data-row"><div class="data-main"><strong>${esc(x.label||x.code)} · ${esc(x.brand)} ${esc(x.model)}</strong><span>${esc(x.class_name||"Sem turma")} · ${esc(x.destination||"Sem destino")}${x.student_name?` · Aluno: ${esc(x.student_name)}`:""}${x.responsible_name?` · Responsável: ${esc(x.responsible_name)}`:""}</span></div><span class="status status-${esc(x.status)}">${esc(statusLabel(x.status))}</span><span class="data-date">${x.returned_at?`Devolvido ${esc(dt(x.returned_at))}`:esc(dt(x.withdrawn_at))}</span></div>`).join("")}</div>`;
 }

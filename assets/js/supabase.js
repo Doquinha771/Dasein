@@ -324,8 +324,9 @@ function formatFilterValue(value) {
 class EquipaSupabaseClient {
   from(table) { return new QueryBuilder(this, table); }
 
-  // Teste seguro e somente leitura. Não exige login, não expõe token e não
-  // consulta dados pessoais. A checagem de tabela usa limit=0.
+  // A API de Auth e pública, mas o inventário NÃO é. Testar uma tabela antes
+  // do login produzia 42501 e fazia o site anunciar falsamente que o banco
+  // estava quebrado. Só testar a tabela com uma sessão válida.
   async diagnoseConnection() {
     const result = { ok: false, status: "offline", project: PROJECT_REF, code: "NETWORK", detail: "Servidor indisponível." };
     try {
@@ -340,8 +341,27 @@ class EquipaSupabaseClient {
           : "A API de autenticação do projeto não respondeu corretamente.";
         return result;
       }
+
+      const { data: sessionData, error: sessionError } = await this.auth.getSession();
+      if (sessionError) {
+        return {
+          ok: false, status: "auth_error", project: PROJECT_REF,
+          code: sessionError.code || "SESSION_REFRESH_FAILED",
+          detail: "A API respondeu, mas não foi possível validar a sessão. Tente entrar novamente."
+        };
+      }
+      const session = sessionData?.session;
+      if (!session?.access_token) {
+        // Anon não deve ter SELECT na tabela protegida. Sem login, o sucesso
+        // do health-check confirma a conexão, não as permissões de usuário.
+        return {
+          ok: true, status: "login_required", project: PROJECT_REF,
+          code: "LOGIN_REQUIRED",
+          detail: "Supabase disponível. Entre com sua conta para acessar os equipamentos."
+        };
+      }
       const response = await fetchWithTimeout(`${API_URL}/rest/v1/equipments?select=id&limit=0`, {
-        method: "GET", headers: { ...authHeaders(), Accept: "application/json" }, cache: "no-store"
+        method: "GET", headers: { ...authHeaders(session), Accept: "application/json" }, cache: "no-store"
       }, 6500);
       if (response.ok) {
         return { ok: true, status: "connected", project: PROJECT_REF, code: "OK", detail: "Autenticação e API do banco respondendo." };
@@ -352,12 +372,14 @@ class EquipaSupabaseClient {
       const credentials = response.status === 401 && /invalid api key|invalid.*jwt|api key/i.test(String(payload?.message || ""));
       return {
         ok: false,
-        status: missing ? "schema" : credentials ? "credentials" : response.status === 401 || response.status === 403 ? "restricted" : "api_error",
+        status: missing ? "schema" : credentials ? "credentials"
+          : response.status === 401 || response.status === 403 || code === "42501" ? "restricted" : "api_error",
         project: PROJECT_REF,
         code,
         detail: missing ? "A tabela de equipamentos não foi encontrada. Verifique as migrations do banco."
           : credentials ? "O servidor rejeitou a chave pública ou a sessão."
-          : response.status === 401 || response.status === 403 ? "A API responde, mas o banco exige autenticação ou permissões adicionais."
+          : response.status === 401 || response.status === 403 || code === "42501"
+            ? "A sessão foi reconhecida, mas não tem acesso ao inventário. Verifique se a conta está ativa e suas permissões."
           : "O banco respondeu com erro. Verifique o painel Supabase."
       };
     } catch (error) {
