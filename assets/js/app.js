@@ -229,25 +229,20 @@ async function scanPublic(token) {
   return Array.isArray(data) ? data[0] || null : data;
 }
 
-let connectionCheckGeneration = 0;
-async function showConnectionStatus() {
-  const current = ++connectionCheckGeneration;
-  const targets = [qs("#supabase-connection"), qs("#startup-connection")].filter(Boolean);
-  if (!targets.length) return;
-  targets.forEach(node => {
-    node.dataset.state = "checking";
-    node.textContent = "Verificando conexão com o Supabase…";
-  });
-  const info = await supabase.diagnoseConnection();
-  if (current !== connectionCheckGeneration) return;
-  // Uma transição de login pode remover a tela enquanto o teste acontece.
-  const visibleTargets = [qs("#supabase-connection"), qs("#startup-connection")].filter(Boolean);
-  visibleTargets.forEach(node => {
-    node.dataset.state = info.status === "login_required" ? "login_required" : info.ok ? "connected" : info.status;
-    node.textContent = info.status === "login_required" ? info.detail
-      : info.ok ? "Supabase conectado · Projeto " + info.project
-      : info.detail + " (" + info.code + ")";
-  });
+// A saúde da API é verificada em silêncio. O inventário continua protegido
+// pelo login; nunca mostrar mensagens de sucesso ou testar tabelas como anon.
+let availabilityCheckGeneration = 0;
+function renderAvailabilityError(info) {
+  window.__equipaBootReady?.();
+  app.innerHTML = `<main class="boot boot-error"><div class="startup-error-card" role="alert"><strong>O Equipa está indisponível.</strong><span>${esc(info.detail || "Não foi possível acessar o servidor. Verifique sua conexão e tente novamente.")}</span><div class="startup-error-actions"><button class="button primary" id="availability-retry" type="button">Tentar novamente</button></div></div></main>`;
+  qs("#availability-retry")?.addEventListener("click", () => { showBootLoader(); void boot(); });
+}
+async function checkAvailabilitySilently() {
+  const check = ++availabilityCheckGeneration;
+  const info = await supabase.checkAvailability();
+  // A tela pode ter mudado enquanto a rede respondia: não interromper o login.
+  if (check !== availabilityCheckGeneration || !qs("#auth-card")) return;
+  if (!info.ok) renderAvailabilityError(info);
 }
 function renderAuth(scan = null) {
   app.innerHTML = `
@@ -260,7 +255,6 @@ function renderAuth(scan = null) {
     <section class="auth-side">
       <div class="auth-card" id="auth-card">
         <span class="eyebrow">Acesso</span><h2>Entrar no Equipa</h2><p>Use sua conta escolar cadastrada.</p>
-        <div class="connection-check" role="status" aria-live="polite"><span id="supabase-connection" data-state="checking">Verificando conexão com o Supabase…</span><button type="button" class="link-button" id="supabase-recheck">Testar conexão</button></div>
         ${scan ? `<div class="scan-preview"><span>QR reconhecido · ${esc(scan.kind === "cart" ? "Carrinho" : "Equipamento")}</span><strong>${esc(scan.display_name)}</strong><span>${scan.model ? `${esc(scan.brand || "")} ${esc(scan.model)}` : `${Number(scan.item_count || 0)} equipamento(s)`}</span>${scan.status ? `<span class="status status-${esc(scan.status)}">${esc(statusLabel(scan.status))}</span>` : ""}</div>` : ""}
         <div class="auth-tabs"><button class="auth-tab active" data-tab="login" type="button">Entrar</button><button class="auth-tab" data-tab="signup" type="button">Criar conta</button></div>
         <form id="login-form" class="auth-form">
@@ -281,8 +275,7 @@ function renderAuth(scan = null) {
     </section>
   </main>`;
 
-  qs("#supabase-recheck")?.addEventListener("click", showConnectionStatus);
-  void showConnectionStatus();
+  void checkAvailabilitySilently();
   qsa("[data-tab]").forEach(btn => btn.addEventListener("click", () => {
     const card = qs("#auth-card");
     card?.classList.remove("switching");
@@ -1778,10 +1771,8 @@ function renderStartupError(error) {
   console.error("Equipa startup:", error);
   window.__equipaBootReady?.();
   const code = /^[A-Z0-9_]{3,32}$/.test(String(error?.code || "")) ? error.code : "SEM_CODIGO";
-  app.innerHTML = `<main class="boot boot-error"><div class="startup-error-card" role="alert"><span class="eyebrow">Diagnóstico de inicialização</span><strong>Não foi possível carregar o painel.</strong><span>${esc(errText(error))}</span><small class="startup-diagnostic">Código: ${esc(code)}. Envie esse código à administração, sem compartilhar sua senha.</small><div class="connection-check" role="status" aria-live="polite"><span id="startup-connection" data-state="checking">Verificando conexão…</span></div><div class="startup-error-actions"><button class="button primary" id="startup-retry" type="button">Tentar novamente</button><button class="button ghost" id="startup-test-connection" type="button">Testar conexão</button><button class="button ghost" id="startup-signout" type="button">Abrir login</button></div></div></main>`;
+  app.innerHTML = `<main class="boot boot-error"><div class="startup-error-card" role="alert"><span class="eyebrow">Diagnóstico de inicialização</span><strong>Não foi possível carregar o painel.</strong><span>${esc(errText(error))}</span><small class="startup-diagnostic">Código: ${esc(code)}. Envie esse código à administração, sem compartilhar sua senha.</small><div class="startup-error-actions"><button class="button primary" id="startup-retry" type="button">Tentar novamente</button><button class="button ghost" id="startup-signout" type="button">Abrir login</button></div></div></main>`;
   qs("#startup-retry")?.addEventListener("click", () => boot());
-  qs("#startup-test-connection")?.addEventListener("click", showConnectionStatus);
-  void showConnectionStatus();
   qs("#startup-signout")?.addEventListener("click", async () => {
     try { await withTimeout(supabase.auth.signOut(), 6000, "saída da conta"); } catch {}
     state.session = null;

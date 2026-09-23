@@ -324,6 +324,27 @@ function formatFilterValue(value) {
 class EquipaSupabaseClient {
   from(table) { return new QueryBuilder(this, table); }
 
+  // Verificação silenciosa da disponibilidade do servidor, sem sessão e sem
+  // consultar qualquer tabela protegida. Só o frontend decide exibir erro.
+  async checkAvailability() {
+    try {
+      const response = await fetchWithTimeout(`${API_URL}/auth/v1/health`, {
+        method: "GET",
+        headers: { apikey: API_KEY, Accept: "application/json" },
+        cache: "no-store"
+      }, 6500);
+      if (response.ok) return { ok: true };
+      return {
+        ok: false,
+        detail: response.status === 401 || response.status === 403
+          ? "Não foi possível validar a conexão com o servidor. Avise a administração."
+          : "O servidor não está respondendo corretamente. Tente novamente em instantes."
+      };
+    } catch {
+      return { ok: false, detail: "Não foi possível acessar o servidor. Verifique sua conexão e tente novamente." };
+    }
+  }
+
   // A API de Auth e pública, mas o inventário NÃO é. Testar uma tabela antes
   // do login produzia 42501 e fazia o site anunciar falsamente que o banco
   // estava quebrado. Só testar a tabela com uma sessão válida.
