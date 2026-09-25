@@ -1806,3 +1806,25 @@ html[data-theme="dark"] #app .auth-terms{color:#c4d5e9!important}
 @media(prefers-reduced-motion:reduce){#app .auth-card.switching{animation:none!important}}
 /* O legado amplia o app inteiro no desktop; o login usa escala nativa da referência. */
 body:has(#app .auth-shell){zoom:1!important}
+
+/* 0.2.9: cadastro rápido; compartilha a paleta do Equipa em telas pequenas e desktop. */
+.quick-register{padding:26px 24px 22px;width:min(500px,100%);max-width:100%;color:var(--ink)}
+.quick-register-head{padding-right:38px;margin-bottom:21px}.quick-register-head h2{margin:4px 0 5px;font-size:24px;letter-spacing:-.025em}.quick-register-head p{color:var(--muted);font-size:13px;line-height:1.5;margin:0}
+.quick-register-form{display:grid;gap:15px}.quick-register-form label{display:grid;gap:6px;min-width:0;font-size:13px;color:var(--ink)}
+.quick-register-form label small{font-size:11px;color:var(--muted);font-weight:400}
+.quick-register-form input{height:47px;min-width:0;background:var(--surface);border-color:var(--line);color:var(--ink)}
+.quick-register-optional{border:1px solid var(--line);border-radius:11px;padding:10px 13px;background:var(--surface-soft);color:var(--ink)}
+.quick-register-optional summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink)}
+.quick-register-optional>div{display:grid;gap:12px;padding-top:12px}
+.quick-register-note{font-size:12px;line-height:1.4;margin:0;color:var(--muted)}
+.quick-register-error{font-size:12px;line-height:1.5;margin:0;color:#c72533;background:#fff0f0;border:1px solid #f3b5b5;padding:9px 12px;border-radius:10px}
+.quick-register-links{display:flex;justify-content:center;align-items:center;gap:16px;flex-wrap:wrap;margin-top:12px}.quick-register-links button{font-size:12px;color:#2e60dc}
+.quick-register-result{text-align:center;display:grid;gap:8px;padding:24px 0 12px}.quick-register-result strong{font-size:21px;color:var(--ink)}.quick-register-result p{font-size:15px;color:var(--ink);margin:0}.quick-register-result small{font-size:12px;color:var(--muted)}
+.quick-register-result-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:9px;margin-top:14px}
+html[data-theme="dark"] .quick-register,html[data-theme="dark"] .quick-register-head h2,html[data-theme="dark"] .quick-register-form label,html[data-theme="dark"] .quick-register-result strong,html[data-theme="dark"] .quick-register-result p{color:var(--ink)!important}
+html[data-theme="dark"] .quick-register-optional{background:var(--surface)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .quick-register-form input{background:#21354e!important;color:#f0f6ff!important;border-color:#486180!important}
+html[data-theme="dark"] .quick-register-form input::placeholder{color:#b6c8df!important}
+html[data-theme="dark"] .quick-register-error{color:#ffc7cc;background:#57252e;border-color:#a94650}
+html[data-theme="dark"] .quick-register-links button{color:#a5c6ff}
+@media(max-width:540px){.quick-register{padding:22px 16px 18px}.quick-register-head h2{font-size:22px}.quick-register-result-actions>.button{flex:1 1 125px}}

@@ -12,7 +12,7 @@
   const groupOptions = () => `<option value="">Selecionar grupo</option>${schoolGroupOptions()}`;
   const registerError = error => {
     const raw = String(error?.message || error || 'Erro desconhecido');
-    if (/EQUIPA_EQUIPMENT_DUPLICATE|duplicate key|23505/i.test(raw)) return 'Já existe um equipamento com este código, patrimônio ou número de série. Revise a prévia e tente novamente. Nenhum registro deste lote foi criado.';
+    if (/EQUIPA_EQUIPMENT_DUPLICATE|duplicate key|23505/i.test(raw)) return 'Este código, patrimônio ou número de série já está cadastrado. Confira os dados e tente novamente. Nenhum equipamento foi criado nesta tentativa.';
     if (/EQUIPA_DUPLICATE_IN_BATCH/.test(raw)) return 'O lote possui códigos, patrimônios ou números de série repetidos. Corrija a prévia.';
     if (/EQUIPA_INVALID_ROW_(\d+)/.test(raw)) return `A linha ${raw.match(/EQUIPA_INVALID_ROW_(\d+)/)[1]} contém um campo inválido. Revise o cadastro.`;
     if (/EQUIPA_BATCH_ACTION_CONFLICT/.test(raw)) return 'A confirmação foi alterada após o envio. Gere uma nova prévia e confirme novamente.';
@@ -239,7 +239,63 @@
       catch(error){notify(error.message,'warning');}
     });
   }
+  // Cadastro rápido: 2 campos obrigatórios, uma única RPC transacional, sem prévia.
+  // Cadastro em lote e importação continuam disponíveis separadamente.
+  function openQuickRegister() {
+    if (state.profile?.role !== 'admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
+    const modal=makeModal(`<div class="quick-register">
+      <header class="quick-register-head"><span class="eyebrow">Inventário</span><h2>Cadastrar computador</h2><p>Preencha o número e o modelo. Os demais dados podem ser adicionados depois.</p></header>
+      <form id="quick-register-form" class="quick-register-form">
+        <label>Número do equipamento *<input name="code" required maxlength="80" autocomplete="off" placeholder="Ex.: NOTE-001" aria-describedby="quick-number-hint"><small id="quick-number-hint">Identificação única na escola.</small></label>
+        <label>Modelo *<input name="model" required maxlength="120" autocomplete="off" placeholder="Ex.: Positivo Motion"></label>
+        <label>Local (opcional)<input name="location_text" maxlength="160" autocomplete="off" placeholder="Ex.: Sala 2"></label>
+        <details class="quick-register-optional"><summary>Mais detalhes (opcional)</summary>
+          <div><label>Fabricante<input name="brand" maxlength="100" placeholder="Ex.: Positivo"></label><label>Patrimônio<input name="asset_tag" maxlength="80" placeholder="Número de patrimônio da escola"></label></div>
+        </details>
+        <p class="quick-register-note">O equipamento será marcado como disponível. O QR permanente é criado automaticamente.</p>
+        <button type="submit" class="button primary full" id="quick-register-submit">Cadastrar equipamento</button>
+        <p id="quick-register-error" role="alert" class="quick-register-error hidden"></p>
+      </form>
+      <div id="quick-register-result" class="quick-register-result hidden" role="status" aria-live="polite"></div>
+      <div class="quick-register-links"><button type="button" class="link-button" id="quick-register-batch">Cadastrar vários</button><button type="button" class="link-button" id="quick-register-import">Importar planilha</button></div>
+    </div>`);
+    const form=$('#quick-register-form',modal),submit=$('#quick-register-submit',modal),result=$('#quick-register-result',modal),errorBox=$('#quick-register-error',modal);
+    let actionId=null;
+    form.addEventListener('input',()=>{if(!submit.disabled){actionId=null;errorBox.classList.add('hidden');}});
+    $('#quick-register-batch',modal).addEventListener('click',()=>{modal.remove();void openHub('batch');});
+    $('#quick-register-import',modal).addEventListener('click',()=>{modal.remove();void openHub('import');});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(submit.disabled)return;
+      const f=new FormData(form);
+      const args={p_code:clean(f.get('code')),p_model:clean(f.get('model')),p_location_text:clean(f.get('location_text'))||null,p_brand:clean(f.get('brand'))||null,p_asset_tag:clean(f.get('asset_tag'))||null};
+      if(!args.p_code||!args.p_model){form.reportValidity();return;}
+      actionId ||= crypto.randomUUID();
+      submit.disabled=true;submit.textContent='Salvando…';errorBox.classList.add('hidden');
+      try {
+        const {data,error}=await supabase.rpc('equipa_quick_register_equipment',{...args,p_action_id:actionId});
+        if(error)throw error;
+        if(!data?.id||!data?.qr_token||data?.code!==args.p_code)throw new Error('Resposta inesperada do cadastro. Consulte o inventário antes de tentar novamente.');
+        form.classList.add('hidden');
+        const model=args.p_model,local=args.p_location_text||'',brand=args.p_brand||'';
+        result.classList.remove('hidden');
+        result.innerHTML=`<strong>Computador cadastrado!</strong><p>${escape(data.code)} · ${escape(model)}</p><small>Disponível no inventário. QR permanente gerado.</small><div class="quick-register-result-actions"><button class="button primary" id="quick-register-again" type="button">Cadastrar outro</button><button class="button ghost" id="quick-register-print" type="button">Baixar QR</button><button class="button ghost" id="quick-register-inventory" type="button">Ver inventário</button></div>`;
+        $('#quick-register-again',result).addEventListener('click',()=>{
+          actionId=null;form.reset();form.elements.model.value=model;form.elements.location_text.value=local;form.elements.brand.value=brand;
+          result.classList.add('hidden');result.replaceChildren();form.classList.remove('hidden');submit.disabled=false;submit.textContent='Cadastrar equipamento';form.elements.code.focus();
+        });
+        $('#quick-register-print',result).addEventListener('click',()=>downloadLabels([data],`Equipa-QR-${data.code}`));
+        $('#quick-register-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        notify(`${data.code} cadastrado no inventário.`,'success');
+      } catch(error) {
+        errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');
+        submit.disabled=false;submit.textContent='Tentar novamente';
+      }
+    });
+    form.elements.code.focus();
+    return modal;
+  }
   async function openHub(initial='individual') {
+    if(initial==='individual') return openQuickRegister();
     if(state.profile?.role!=='admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
     const modal=makeModal(`<div class="ref-modal-shell ref-register-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item" type="button" data-intake-mode="individual"><span>${uiIcon('equipment',18)}</span><div><strong>Individual</strong><small>Cadastrar um único equipamento</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="batch"><span>${uiIcon('grid',18)}</span><div><strong>Em lote</strong><small>Cadastrar vários equipamentos</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="import"><span>${uiIcon('upload',18)}</span><div><strong>Importar arquivo</strong><small>Excel, CSV ou planilha</small></div></button><button class="ref-modal-nav-item ghost-alt" type="button" id="eq-manage-models"><span>${uiIcon('admin',18)}</span><div><strong>Modelos técnicos</strong><small>Usar modelos pré-cadastrados</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Preencha apenas as informações que souber. Os campos opcionais podem ser completados depois.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div id="eq-intake-workspace" class="ref-register-workspace"><p class="muted">Carregando modelos…</p></div></div></div>`,true);
     const ctx={models:[],mode:initial,rows:[],actionId:null};
