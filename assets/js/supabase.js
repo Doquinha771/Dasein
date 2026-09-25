@@ -29,6 +29,7 @@ if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(API_URL) || !/^sb_publishable_
 const STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 const listeners = new Set();
 let memorySession = null;
+let sessionPersistence = "local";
 let refreshTimer = null;
 const NETWORK_TIMEOUT_MS = 12000;
 
@@ -59,26 +60,35 @@ function safeJsonParse(value) {
 
 function readStoredSession() {
   if (memorySession) return memorySession;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = safeJsonParse(raw);
-    if (!parsed) return null;
-    // Supabase-js uses this same storage key. Accept both a direct session and
-    // compatibility wrappers that may contain currentSession/session.
-    const candidate = parsed.currentSession || parsed.session || parsed;
-    if (candidate?.access_token && candidate?.refresh_token) {
-      memorySession = normalizeSession(candidate);
-      return memorySession;
-    }
-  } catch {}
+  // A sessão desta aba tem prioridade quando "Lembrar de mim" estiver desmarcado.
+  for (const mode of ["session", "local"]) {
+    try {
+      const storage = mode === "session" ? sessionStorage : localStorage;
+      const raw = storage.getItem(STORAGE_KEY);
+      const parsed = safeJsonParse(raw);
+      if (!parsed) continue;
+      const candidate = parsed.currentSession || parsed.session || parsed;
+      if (candidate?.access_token && candidate?.refresh_token) {
+        sessionPersistence = mode;
+        memorySession = normalizeSession(candidate);
+        return memorySession;
+      }
+    } catch {}
+  }
   return null;
 }
 
 function writeStoredSession(session) {
   memorySession = session || null;
   try {
-    if (session) localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (session) {
+      const target = sessionPersistence === "session" ? sessionStorage : localStorage;
+      target.setItem(STORAGE_KEY, JSON.stringify(session));
+      (sessionPersistence === "session" ? localStorage : sessionStorage).removeItem(STORAGE_KEY);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(STORAGE_KEY);
+    }
   } catch {}
   scheduleRefresh(session);
 }
@@ -443,11 +453,12 @@ class EquipaSupabaseClient {
       }
     },
 
-    signInWithPassword: async ({ email, password }) => {
+    signInWithPassword: async ({ email, password, remember = true }) => {
       try {
         const payload = await authFetch("/token?grant_type=password", { body: { email, password } });
         const session = normalizeSession(payload);
         if (!session) throw new Error("Resposta de login inválida.");
+        sessionPersistence = remember ? "local" : "session";
         writeStoredSession(session);
         emitAuth("SIGNED_IN", session);
         return { data: { user: session.user, session }, error: null };

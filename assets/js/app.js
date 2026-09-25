@@ -245,61 +245,89 @@ async function checkAvailabilitySilently() {
   if (!info.ok) renderAvailabilityError(info);
 }
 function renderAuth(scan = null) {
+  const book = `<svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M23 12c-5.3-4.2-11.7-5.2-17-2.7a2.4 2.4 0 0 0-1.4 2.2v22.3c0 1.4 1.3 2.5 2.7 2.2 5.6-1.2 10.7.2 15.7 4.1V12Zm2 0c5.3-4.2 11.7-5.2 17-2.7a2.4 2.4 0 0 1 1.4 2.2v22.3c0 1.4-1.3 2.5-2.7 2.2-5.6-1.2-10.7.2-15.7 4.1V12Z" fill="currentColor"/><path d="M23 40V14m2 26V14M7 40c5.9-1.7 11-.5 16 2m18-2c-5.9-1.7-11-.5-16 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
   app.innerHTML = `
   <main class="auth-shell">
-    <section class="auth-brand">
-      <div class="brandline"><strong class="equipa-wordmark">Equipa</strong></div>
-      <div class="auth-brand-copy"><span class="eyebrow" style="color:rgba(255,255,255,.65)">Equipamentos escolares</span><h1>Um lugar para saber onde cada equipamento está.</h1><p>Retiradas, devoluções, carrinhos, QR Codes, manutenção e histórico em um único ambiente escolar.</p></div>
-      <span class="auth-version">Equipa ${esc(config.version)} · Web</span>
+    <section class="auth-brand" aria-label="Sobre o Equipa">
+      <div class="brandline auth-identity"><span class="auth-brand-icon">${book}</span><span class="auth-identity-copy"><strong>Equipa</strong><small>EQUIPAMENTOS ESCOLARES</small></span></div>
+      <div class="auth-brand-copy">
+        <h1>Controle de<br>equipamentos escolares</h1>
+        <p>Organize retiradas e devoluções em um só lugar.</p>
+        <ul class="auth-benefits" aria-label="Recursos do Equipa">
+          <li><span>${uiIcon("qr",26)}</span>Identificação por QR Code</li>
+          <li><span>${uiIcon("withdrawals",26)}</span>Controle de retiradas e devoluções</li>
+          <li><span>${uiIcon("reports",26)}</span>Histórico de utilização</li>
+        </ul>
+      </div>
+      <span class="auth-brand-bottom" aria-hidden="true"></span>
     </section>
     <section class="auth-side">
       <div class="auth-card" id="auth-card">
-        <span class="eyebrow">Acesso</span><h2>Entrar no Equipa</h2><p>Use sua conta escolar cadastrada.</p>
+        <div class="brandline auth-card-identity"><span class="auth-brand-icon">${book}</span><span class="auth-identity-copy"><strong>Equipa</strong><small>EQUIPAMENTOS ESCOLARES</small></span></div>
+        <div class="auth-heading"><h2 id="auth-heading">Entrar na sua conta</h2><p id="auth-intro">Use sua conta escolar para acessar o Equipa.</p></div>
         ${scan ? `<div class="scan-preview"><span>QR reconhecido · ${esc(scan.kind === "cart" ? "Carrinho" : "Equipamento")}</span><strong>${esc(scan.display_name)}</strong><span>${scan.model ? `${esc(scan.brand || "")} ${esc(scan.model)}` : `${Number(scan.item_count || 0)} equipamento(s)`}</span>${scan.status ? `<span class="status status-${esc(scan.status)}">${esc(statusLabel(scan.status))}</span>` : ""}</div>` : ""}
-        <div class="auth-tabs"><button class="auth-tab active" data-tab="login" type="button">Entrar</button><button class="auth-tab" data-tab="signup" type="button">Criar conta</button></div>
         <form id="login-form" class="auth-form">
-          <label>E-mail<input id="login-email" type="email" autocomplete="email" required></label>
-          <label>Senha<input id="login-password" type="password" autocomplete="current-password" minlength="6" required></label>
-          <button class="button primary full" type="submit">Entrar</button>
-          <button class="link-button" id="forgot" type="button">Esqueci minha senha</button>
+          <label for="login-email">E-mail escolar</label>
+          <div class="auth-input-wrap">${uiIcon("mail",20)}<input id="login-email" type="email" name="email" placeholder="exemplo@al.educacao.sp.gov.br" autocomplete="email" inputmode="email" required></div>
+          <label for="login-password">Senha</label>
+          <div class="auth-input-wrap">${uiIcon("lock",20)}<input id="login-password" type="password" name="password" placeholder="Digite sua senha" autocomplete="current-password" minlength="6" required><button type="button" class="auth-password-toggle" data-password-toggle="login-password" aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha">${uiIcon("eye-off",20)}</button></div>
+          <button class="button primary full auth-submit" type="submit">Entrar ${uiIcon("arrow",20)}</button>
+          <div class="auth-login-options"><label class="auth-remember" for="login-remember"><input id="login-remember" type="checkbox"><span>Lembrar de mim</span></label><button class="link-button" id="forgot" type="button">Esqueci minha senha</button></div>
         </form>
         <form id="signup-form" class="auth-form hidden">
-          <label>Nome completo<input id="signup-name" type="text" autocomplete="name" minlength="3" maxlength="120" required></label>
-          <label>E-mail<input id="signup-email" type="email" autocomplete="email" required></label>
-          <label>Senha<input id="signup-password" type="password" autocomplete="new-password" minlength="8" required></label>
-          <label class="check"><input id="signup-terms" type="checkbox" required><span>Li os <button class="link-button" data-legal="terms" type="button">Termos de Uso</button> e a <button class="link-button" data-legal="privacy" type="button">Política de Privacidade</button>.</span></label>
-          <button class="button primary full" type="submit">Criar conta</button>
+          <label for="signup-name">Nome completo</label><div class="auth-input-wrap">${uiIcon("user",20)}<input id="signup-name" type="text" autocomplete="name" minlength="3" maxlength="120" placeholder="Seu nome completo" required></div>
+          <label for="signup-email">E-mail escolar</label><div class="auth-input-wrap">${uiIcon("mail",20)}<input id="signup-email" type="email" autocomplete="email" inputmode="email" placeholder="exemplo@al.educacao.sp.gov.br" required></div>
+          <label for="signup-password">Senha</label><div class="auth-input-wrap">${uiIcon("lock",20)}<input id="signup-password" type="password" autocomplete="new-password" minlength="8" placeholder="Crie uma senha com 8 caracteres ou mais" required><button type="button" class="auth-password-toggle" data-password-toggle="signup-password" aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha">${uiIcon("eye-off",20)}</button></div>
+          <label class="check auth-terms"><input id="signup-terms" type="checkbox" required><span>Li os <button class="link-button" data-legal="terms" type="button">Termos de Uso</button> e a <button class="link-button" data-legal="privacy" type="button">Política de Privacidade</button>.</span></label>
+          <button class="button primary full auth-submit" type="submit">Criar conta ${uiIcon("arrow",20)}</button>
         </form>
-        <div class="auth-footer">Dados operacionais são usados apenas para gerenciar equipamentos e movimentações da escola. O painel evita usar e-mail como identificação principal.</div>
-      </div><footer class="equipa-watermark auth-watermark">feito pela equipe da coordenação da escola e 3-A do ensino médio</footer>
+        <div class="auth-switch"><div class="auth-separator" aria-hidden="true"><span>ou</span></div><button class="button full auth-create" data-tab="signup" type="button">${uiIcon("user-plus",20)} Criar conta</button><button class="link-button auth-back hidden" data-tab="login" type="button">${uiIcon("arrow-left",18)} Voltar para entrar</button></div>
+        <div class="auth-help">${uiIcon("info",19)}<span>Use seu e-mail institucional da escola.<br>Caso não possua uma conta, solicite à secretaria.</span></div>
+      </div>
     </section>
   </main>`;
 
   void checkAvailabilitySilently();
-  qsa("[data-tab]").forEach(btn => btn.addEventListener("click", () => {
+  qsa("[data-tab]", qs("#auth-card")).forEach(btn => btn.addEventListener("click", () => {
     const card = qs("#auth-card");
+    const isLogin = btn.dataset.tab === "login";
     card?.classList.remove("switching");
     void card?.offsetWidth;
     card?.classList.add("switching");
-    qsa("[data-tab]").forEach(x => x.classList.toggle("active", x === btn));
-    qs("#login-form").classList.toggle("hidden", btn.dataset.tab !== "login");
-    qs("#signup-form").classList.toggle("hidden", btn.dataset.tab !== "signup");
+    qs("#login-form")?.classList.toggle("hidden", !isLogin);
+    qs("#signup-form")?.classList.toggle("hidden", isLogin);
+    qs(".auth-create", card)?.classList.toggle("hidden", !isLogin);
+    qs(".auth-separator", card)?.classList.toggle("hidden", !isLogin);
+    qs(".auth-back", card)?.classList.toggle("hidden", isLogin);
+    qs("#auth-heading").textContent = isLogin ? "Entrar na sua conta" : "Criar sua conta";
+    qs("#auth-intro").textContent = isLogin ? "Use sua conta escolar para acessar o Equipa." : "Cadastre-se com seu e-mail escolar.";
     setTimeout(() => card?.classList.remove("switching"), 220);
   }));
-  qsa("[data-legal]").forEach(btn => btn.addEventListener("click", () => openLegal(btn.dataset.legal)));
+  qsa("[data-password-toggle]", qs("#auth-card")).forEach(button => button.addEventListener("click", () => {
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (!input) return;
+    const showing = input.type === "password";
+    input.type = showing ? "text" : "password";
+    button.setAttribute("aria-label", showing ? "Ocultar senha" : "Mostrar senha");
+    button.setAttribute("title", showing ? "Ocultar senha" : "Mostrar senha");
+    button.setAttribute("aria-pressed", String(showing));
+    button.innerHTML = uiIcon(showing ? "eye" : "eye-off", 20);
+    input.focus({ preventScroll: true });
+  }));
+  qsa("[data-legal]", qs("#auth-card")).forEach(btn => btn.addEventListener("click", () => openLegal(btn.dataset.legal)));
 
   qs("#login-form").addEventListener("submit", async e => {
     e.preventDefault(); const b = qs('button[type="submit"]', e.currentTarget); setBusy(b, true, "Entrando…");
-    const { error } = await supabase.auth.signInWithPassword({ email: qs("#login-email").value.trim(), password: qs("#login-password").value });
-    setBusy(b, false); if (error) notify(errText(error), "error");
+    const { error } = await supabase.auth.signInWithPassword({ email: qs("#login-email").value.trim(), password: qs("#login-password").value, remember: qs("#login-remember").checked });
+    setBusy(b, false); if (error) { if (b.isConnected) b.innerHTML = `Entrar ${uiIcon("arrow",20)}`; notify(errText(error), "error"); }
   });
   qs("#signup-form").addEventListener("submit", async e => {
     e.preventDefault(); const b = qs('button[type="submit"]', e.currentTarget); setBusy(b, true, "Criando…");
     const { data, error } = await supabase.auth.signUp({ email: qs("#signup-email").value.trim(), password: qs("#signup-password").value, options: { data: { full_name: qs("#signup-name").value.trim() } } });
-    setBusy(b, false); if (error) return notify(errText(error), "error");
+    setBusy(b, false); if (error) { if (b.isConnected) b.innerHTML = `Criar conta ${uiIcon("arrow",20)}`; return notify(errText(error), "error"); }
     if (data.session) await supabase.rpc("accept_legal_documents", { p_terms_version: config.legalTermsVersion, p_privacy_version: config.privacyVersion });
     notify(data.session ? "Conta criada." : "Conta criada. Confirme o e-mail para entrar.", "success");
-    if (!data.session) qs('[data-tab="login"]').click();
+    if (!data.session) qs('[data-tab="login"]', qs("#auth-card"))?.click();
   });
   qs("#forgot").addEventListener("click", async () => {
     const email = qs("#login-email").value.trim(); if (!email) return notify("Digite seu e-mail primeiro.", "warning");
@@ -386,6 +414,14 @@ function greeting() {
   return "Boa noite";
 }
 const UI_GLYPHS = {
+  mail:'<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 7 9 7 9-7"/>',
+  lock:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',
+  eye:'<path d="M2 12s3.4-6 10-6 10 6 10 6-3.4 6-10 6-10-6-10-6z"/><circle cx="12" cy="12" r="3"/>',
+  'eye-off':'<path d="M3 3 21 21M10.6 6.1A10 10 0 0 1 12 6c6.6 0 10 6 10 6a15 15 0 0 1-3.2 3.8M6.3 6.4C3.5 8.2 2 12 2 12s3.4 6 10 6a10 10 0 0 0 4.3-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',
+  'user-plus':'<circle cx="10" cy="8" r="4"/><path d="M2 21v-2a8 8 0 0 1 13-6M19 15v7m-3.5-3.5h7"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-10h.01"/>',
+  'arrow-left':'<path d="m15 18-6-6 6-6M9 12h12"/>',
   qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v3m-3 3h3m0-3v3M14 20v1"/>',
  dashboard:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
  equipment:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
