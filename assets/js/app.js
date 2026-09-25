@@ -263,7 +263,6 @@ function renderAuth(scan = null) {
     </section>
     <section class="auth-side">
       <div class="auth-card" id="auth-card">
-        <div class="brandline auth-card-identity"><span class="auth-brand-icon">${book}</span><span class="auth-identity-copy"><strong>Equipa</strong><small>EQUIPAMENTOS ESCOLARES</small></span></div>
         <div class="auth-heading"><h2 id="auth-heading">Entrar na sua conta</h2><p id="auth-intro">Use sua conta escolar para acessar o Equipa.</p></div>
         ${scan ? `<div class="scan-preview"><span>QR reconhecido · ${esc(scan.kind === "cart" ? "Carrinho" : "Equipamento")}</span><strong>${esc(scan.display_name)}</strong><span>${scan.model ? `${esc(scan.brand || "")} ${esc(scan.model)}` : `${Number(scan.item_count || 0)} equipamento(s)`}</span>${scan.status ? `<span class="status status-${esc(scan.status)}">${esc(statusLabel(scan.status))}</span>` : ""}</div>` : ""}
         <form id="login-form" class="auth-form">
