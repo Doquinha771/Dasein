@@ -1,0 +1,59 @@
+name: Verificacao de atividade do Supabase - Equipa
+
+on:
+  schedule:
+    # Duas verificacoes por dia, a cada 12 horas (UTC).
+    - cron: '17 0,12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar-banco:
+    name: Consulta PostgreSQL somente leitura
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Instalar cliente PostgreSQL
+        run: python -m pip install --disable-pip-version-check 'psycopg[binary]>=3.2,<4'
+
+      - name: Verificar conexao e executar consultas leves
+        env:
+          SUPABASE_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from datetime import datetime, timezone
+
+          import psycopg
+
+          url = os.environ.get('SUPABASE_DATABASE_URL')
+          if not url:
+              print('::error::Secret SUPABASE_DATABASE_URL nao configurado.')
+              sys.exit(1)
+
+          try:
+              with psycopg.connect(
+                  url,
+                  connect_timeout=15,
+                  options='-c default_transaction_read_only=on',
+              ) as conn:
+                  with conn.cursor() as cursor:
+                      cursor.execute('SET TRANSACTION READ ONLY')
+                      for _ in range(3):
+                          cursor.execute('SELECT 1')
+                          if cursor.fetchone() != (1,):
+                              raise RuntimeError('Resposta inesperada')
+              print('Equipa: tres consultas somente leitura concluidas.')
+              print('UTC:', datetime.now(timezone.utc).isoformat())
+          except Exception as exc:
+              # Nunca mostrar a URL, usuario, senha ou mensagem da excecao.
+              print(
+                  '::error::Equipa: falha de conexao/consulta '
+                  f'({type(exc).__name__}). Verifique o Supabase e o Secret.'
+              )
+              sys.exit(1)
+          PY
