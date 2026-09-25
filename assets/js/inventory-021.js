@@ -15,6 +15,7 @@
     if (/EQUIPA_EQUIPMENT_DUPLICATE|duplicate key|23505/i.test(raw)) return 'Este código, patrimônio ou número de série já está cadastrado. Confira os dados e tente novamente. Nenhum equipamento foi criado nesta tentativa.';
     if (/EQUIPA_DUPLICATE_IN_BATCH/.test(raw)) return 'O lote possui códigos, patrimônios ou números de série repetidos. Corrija a prévia.';
     if (/EQUIPA_INVALID_ROW_(\d+)/.test(raw)) return `A linha ${raw.match(/EQUIPA_INVALID_ROW_(\d+)/)[1]} contém um campo inválido. Revise o cadastro.`;
+    if (/EQUIPA_BATCH_INPUT_INVALID/.test(raw)) return 'Confira prefixo, número inicial, quantidade (1 a 200) e modelo.';
     if (/EQUIPA_BATCH_ACTION_CONFLICT/.test(raw)) return 'A confirmação foi alterada após o envio. Gere uma nova prévia e confirme novamente.';
     if (/EQUIPA_MODEL_NOT_FOUND/.test(raw)) return 'O modelo escolhido não está mais disponível. Selecione outro modelo.';
     return errText(error);
@@ -194,7 +195,7 @@
       const sheet=wb.Sheets[wb.SheetNames[0]];
       raw=window.XLSX.utils.sheet_to_json(sheet,{defval:'',raw:false});
     } else throw new Error('Formato não aceito. Use CSV, XLSX ou DOCX com tabela.');
-    if(!raw.length||raw.length>MAX) throw new Error('O arquivo precisa conter de 1 a 200 equipamentos por confirmação. Separe arquivos maiores por laboratório.');
+    if(!raw.length||raw.length>2000) throw new Error('O arquivo deve conter de 1 a 2.000 equipamentos. Para arquivos maiores, separe por escola ou laboratório.');
     const parsed=mapImportRows(raw);
     return parsed.map((row,i)=>({
       ...row,
@@ -248,6 +249,7 @@
       <form id="quick-register-form" class="quick-register-form">
         <label>Número do equipamento *<input name="code" required maxlength="80" autocomplete="off" placeholder="Ex.: NOTE-001" aria-describedby="quick-number-hint"><small id="quick-number-hint">Identificação única na escola.</small></label>
         <label>Modelo *<input name="model" required maxlength="120" autocomplete="off" placeholder="Ex.: Positivo Motion"></label>
+        <label>Número de série (opcional)<input name="serial_number" maxlength="120" autocomplete="off" placeholder="Ex.: SN123456"><small>Identificação do fabricante; deixe vazio se não souber.</small></label>
         <label>Local (opcional)<input name="location_text" maxlength="160" autocomplete="off" placeholder="Ex.: Sala 2"></label>
         <details class="quick-register-optional"><summary>Mais detalhes (opcional)</summary>
           <div><label>Fabricante<input name="brand" maxlength="100" placeholder="Ex.: Positivo"></label><label>Patrimônio<input name="asset_tag" maxlength="80" placeholder="Número de patrimônio da escola"></label></div>
@@ -267,13 +269,20 @@
     form.addEventListener('submit',async event=>{
       event.preventDefault();if(submit.disabled)return;
       const f=new FormData(form);
-      const args={p_code:clean(f.get('code')),p_model:clean(f.get('model')),p_location_text:clean(f.get('location_text'))||null,p_brand:clean(f.get('brand'))||null,p_asset_tag:clean(f.get('asset_tag'))||null};
+      const args={p_code:clean(f.get('code')),p_model:clean(f.get('model')),p_serial_number:clean(f.get('serial_number'))||null,p_location_text:clean(f.get('location_text'))||null,p_brand:clean(f.get('brand'))||null,p_asset_tag:clean(f.get('asset_tag'))||null};
       if(!args.p_code||!args.p_model){form.reportValidity();return;}
       actionId ||= crypto.randomUUID();
       submit.disabled=true;submit.textContent='Salvando…';errorBox.classList.add('hidden');
       try {
-        const {data,error}=await supabase.rpc('equipa_quick_register_equipment',{...args,p_action_id:actionId});
+        // A RPC de lote já aceita série opcional e preserva a mesma autorização,
+        // geração de QR e idempotência do cadastro rápido, numa única chamada.
+        const {data:batchData,error}=await supabase.rpc('equipa_register_equipment_batch',{
+          p_items:[{code:args.p_code,model:args.p_model,serial_number:args.p_serial_number,
+            location_text:args.p_location_text,brand:args.p_brand||'Não informado',asset_tag:args.p_asset_tag}],
+          p_action_id:actionId
+        });
         if(error)throw error;
+        const data=Array.isArray(batchData)&&batchData.length===1?batchData[0]:null;
         if(!data?.id||!data?.qr_token||data?.code!==args.p_code)throw new Error('Resposta inesperada do cadastro. Consulte o inventário antes de tentar novamente.');
         form.classList.add('hidden');
         const model=args.p_model,local=args.p_location_text||'',brand=args.p_brand||'';
@@ -294,8 +303,151 @@
     form.elements.code.focus();
     return modal;
   }
+  // Cadastro sequencial: 5 entradas compartilhadas -> 1 RPC para até 200 computadores.
+  // Nada de 200 formulários, 200 verificações remotas ou PDF pesado na confirmação.
+  function openQuickBatch() {
+    if (state.profile?.role !== 'admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
+    const modal=makeModal(`<div class="quick-register quick-batch" id="quick-batch">
+      <header class="quick-register-head"><h2>Cadastrar vários computadores</h2><p>Informe a sequência e o modelo uma única vez. O banco gera os códigos e QR Codes.</p></header>
+      <form id="quick-batch-form" class="quick-register-form">
+        <label>Prefixo do número (opcional)<input name="prefix" maxlength="30" placeholder="Ex.: NOTE-" autocomplete="off"></label>
+        <div class="quick-batch-pair"><label>Número inicial *<input name="start" required inputmode="numeric" pattern="[0-9]{1,8}" maxlength="8" value="001" autocomplete="off" placeholder="001"></label><label>Quantidade *<input name="quantity" required type="number" min="1" max="200" value="30" inputmode="numeric"></label></div>
+        <label>Modelo de todos os equipamentos *<input name="model" maxlength="120" required placeholder="Ex.: Positivo Motion"></label>
+        <label>Números de série (opcional)<textarea name="serial_numbers" rows="2" spellcheck="false" placeholder="Cole uma série por linha, na mesma ordem dos computadores"></textarea><small>Se preencher, informe uma série diferente para cada computador. Pode deixar vazio e cadastrar normalmente.</small></label>
+        <label>Local de todos (opcional)<input name="location_text" maxlength="160" placeholder="Ex.: Laboratório 2"></label>
+        <details class="quick-register-optional"><summary>Outros dados (opcional)</summary><div><label>Fabricante<input name="brand" maxlength="100" placeholder="Ex.: Positivo"></label></div></details>
+        <div class="quick-batch-preview" id="quick-batch-preview" role="status" aria-live="polite"></div>
+        <p class="quick-register-note">Todos serão cadastrados como disponíveis. Uma sequência de até 200 itens é confirmada em uma só operação; uma falha não deixa metade do lote salvo.</p>
+        <button type="submit" class="button primary full" id="quick-batch-submit">Cadastrar lote</button>
+        <p id="quick-batch-error" role="alert" class="quick-register-error hidden"></p>
+      </form>
+      <div class="quick-register-result hidden" id="quick-batch-result" role="status" aria-live="polite"></div>
+    </div>`);
+    const form=$('#quick-batch-form',modal), button=$('#quick-batch-submit',modal),
+      preview=$('#quick-batch-preview',modal), errorBox=$('#quick-batch-error',modal), result=$('#quick-batch-result',modal);
+    let actionId=null;
+    const getInputs=()=>{const f=new FormData(form);return {
+      p_prefix:clean(f.get('prefix')),p_start:clean(f.get('start')),
+      p_quantity:Number(f.get('quantity')),p_model:clean(f.get('model')),
+      p_location_text:clean(f.get('location_text'))||null,p_brand:clean(f.get('brand'))||null,
+      serials:clean(f.get('serial_numbers'))?String(f.get('serial_numbers')).replace(/(?:\r?\n)+$/,'').split(/\r?\n/).map(clean):[]
+    };};
+    const calculate=()=>{
+      const v=getInputs();
+      if(!/^\d{1,8}$/.test(v.p_start)||!Number.isInteger(v.p_quantity)||v.p_quantity<1||v.p_quantity>MAX || Number(v.p_start)+v.p_quantity-1>99999999 || v.p_prefix.length>30){
+        preview.textContent='Informe um número inicial válido e uma quantidade de 1 a 200.';button.disabled=true;return null;
+      }
+      const code=n=>v.p_prefix+String(Number(v.p_start)+n).padStart(v.p_start.length,'0');
+      if(code(v.p_quantity-1).length>80){preview.textContent='Os códigos excedem 80 caracteres.';button.disabled=true;return null;}
+      if(v.serials.length && (v.serials.length!==v.p_quantity || v.serials.some(s=>!s || s.length>120)
+          || new Set(v.serials.map(s=>s.toLocaleLowerCase('pt-BR'))).size!==v.serials.length)) {
+        preview.textContent='Informe exatamente uma série distinta (até 120 caracteres) por equipamento ou deixe o campo vazio.';
+        button.disabled=true;return null;
+      }
+      preview.innerHTML=`<strong>${v.p_quantity} equipamento(s)</strong><span>De ${escape(code(0))} até ${escape(code(v.p_quantity-1))}</span><small>${v.serials.length?'Séries individuais incluídas. ':'Números de série podem ser adicionados depois. '}Confira se os códigos já não existem.</small>`;
+      button.disabled=false;return v;
+    };
+    form.addEventListener('input',()=>{if(!button.dataset.busy){actionId=null;errorBox.classList.add('hidden');calculate();}});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(button.disabled||button.dataset.busy)return;
+      const args=calculate();if(!args||!args.p_model){form.reportValidity();return;}
+      actionId ||= crypto.randomUUID();button.dataset.busy='1';button.disabled=true;button.textContent='Salvando lote…';errorBox.classList.add('hidden');
+      try{
+        const {serials,...sequentialArgs}=args;
+        const rpcName=serials.length?'equipa_register_equipment_batch':'equipa_quick_register_sequential';
+        const rpcArgs=serials.length?{
+          p_items:serials.map((serial_number,i)=>({
+            code:args.p_prefix+String(Number(args.p_start)+i).padStart(args.p_start.length,'0'),
+            model:args.p_model,brand:args.p_brand||'Não informado',location_text:args.p_location_text,serial_number
+          })),p_action_id:actionId
+        }:{...sequentialArgs,p_action_id:actionId};
+        const {data,error}=await supabase.rpc(rpcName,rpcArgs);
+        if(error)throw error;
+        if(!Array.isArray(data)||data.length!==args.p_quantity||data.some(x=>!x.id||!x.qr_token))throw new Error('Resposta incerta. Confira o inventário antes de repetir o lote.');
+        form.classList.add('hidden');result.classList.remove('hidden');
+        result.innerHTML=`<strong>${data.length} computadores cadastrados</strong><p>${escape(data[0].code)} até ${escape(data[data.length-1].code)}</p><small>QRs permanentes gerados. Baixar as etiquetas é opcional.</small><div class="quick-register-result-actions"><button class="button primary" id="quick-batch-next" type="button">Cadastrar próximo lote</button><button class="button ghost" id="quick-batch-labels" type="button">Baixar etiquetas</button><button class="button ghost" id="quick-batch-inventory" type="button">Ver inventário</button></div>`;
+        $('#quick-batch-labels',result).addEventListener('click',()=>downloadLabels(data,'Equipa-QR-lote'));
+        $('#quick-batch-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        $('#quick-batch-next',result).addEventListener('click',()=>{
+          actionId=null;const next=Number(args.p_start)+args.p_quantity;
+          form.elements.start.value=String(next).padStart(args.p_start.length,'0');
+          form.elements.serial_numbers.value='';
+          result.classList.add('hidden');result.replaceChildren();form.classList.remove('hidden');
+          delete button.dataset.busy;button.textContent='Cadastrar lote';calculate();form.elements.start.focus();
+        });
+        notify(`${data.length} computadores registrados no Supabase.`,'success');
+      }catch(error){errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');button.textContent='Tentar novamente';button.disabled=false;delete button.dataset.busy;}
+    });
+    calculate();form.elements.prefix.focus();return modal;
+  }
+
+  // Importação rápida: códigos + modelo (na linha ou compartilhado). No máximo 2.000
+  // itens por arquivo, 200 por transação. Só avança após confirmar o lote anterior.
+  // IDs por lote permanecem estáveis em tentativas após timeout de rede.
+  function openQuickImport(){
+    if(state.profile?.role!=='admin')return notify('Apenas administradores podem cadastrar equipamentos.','error');
+    const modal=makeModal(`<div class="quick-register quick-import" id="quick-import"><header class="quick-register-head"><h2>Importar computadores</h2><p>Uma planilha com Número e Modelo é suficiente. Até 2.000 equipamentos por arquivo, em blocos de 200.</p></header>
+      <form id="quick-import-form" class="quick-register-form"><label>Arquivo CSV, Excel ou Word<input type="file" name="file" accept=".csv,.xlsx,.docx" required></label>
+      <label>Modelo para linhas sem modelo (opcional)<input name="model" maxlength="120" placeholder="Ex.: Positivo Motion"></label>
+      <label>Local para linhas sem local (opcional)<input name="location_text" maxlength="160" placeholder="Ex.: Sala 3"></label>
+      <div id="quick-import-preview" class="quick-import-preview" aria-live="polite"><small>Confira o arquivo antes de confirmar. Nada é salvo nesta etapa.</small></div>
+      <button class="button primary full" id="quick-import-submit" type="submit" disabled>Importar computadores</button><p class="quick-register-error hidden" id="quick-import-error" role="alert"></p>
+      </form></div>`);
+    const form=$('#quick-import-form',modal),preview=$('#quick-import-preview',modal),button=$('#quick-import-submit',modal),errorBox=$('#quick-import-error',modal);
+    let rawRows=[],rows=[],ids=[],offset=0,created=[];
+    const refresh=()=>{
+      if(!rawRows.length)return;
+      const sharedModel=clean(form.elements.model.value),sharedLocation=clean(form.elements.location_text.value);
+      rows=rawRows.map(r=>({...r,model:clean(r.model)||sharedModel,brand:clean(r.brand)||'Não informado',location_text:clean(r.location_text)||sharedLocation||null}));
+      const problems=validateRows(rows);let bad=0;const first=[];
+      problems.forEach((x,i)=>{if(x.problems.length){bad++;if(first.length<5)first.push(`Linha ${x.line}: ${x.problems.join(', ')}`);}});
+      const examples=rows.slice(0,Math.min(5,rows.length)).map(x=>`<li>${escape(x.code)} · ${escape(x.model||'Modelo ausente')}</li>`).join('');
+      preview.innerHTML=`<strong>${rows.length} equipamento(s)</strong><small>${Math.ceil(rows.length/MAX)} bloco(s), até 200 por transação. ${bad?`${bad} linha(s) para corrigir.`:'Pronto para cadastrar.'}</small><ul>${examples}</ul>${first.length?`<div class="quick-import-errors">${first.map(escape).join('<br>')}</div>`:''}`;
+      button.disabled=bad>0||offset>0;button.textContent=`Importar ${rows.length} computador(es)`;
+    };
+    form.elements.file.addEventListener('change',async()=>{
+      button.disabled=true;preview.textContent='Lendo arquivo…';errorBox.classList.add('hidden');rawRows=[];rows=[];ids=[];created=[];offset=0;
+      try{rawRows=await importFile(form.elements.file.files?.[0]);refresh();}
+      catch(error){preview.textContent='Arquivo não carregado.';errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');}
+    });
+    for(const name of ['model','location_text'])form.elements[name].addEventListener('input',()=>{if(offset===0){ids=[];refresh();}});
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(!rows.length||button.disabled)return;
+      if(validateRows(rows).some(x=>x.problems.length))return refresh();
+      button.disabled=true;form.elements.file.disabled=true;form.elements.model.readOnly=true;form.elements.location_text.readOnly=true;
+      errorBox.classList.add('hidden');
+      try{
+        while(offset<rows.length){
+          const chunk=rows.slice(offset,offset+MAX);
+          const blockIndex=Math.floor(offset/MAX);ids[blockIndex] ||= crypto.randomUUID();
+          button.textContent=`Salvando ${offset+1}–${offset+chunk.length} de ${rows.length}…`;
+          preview.querySelector('small').textContent=`${offset} de ${rows.length} confirmados. Aguarde o bloco atual.`;
+          const payload=chunk.map(r=>Object.fromEntries(FIELDS.map(k=>[k,r[k]??null]).concat([['template_id',r.template_id||null]])));
+          const {data,error}=await supabase.rpc('equipa_register_equipment_batch',{p_items:payload,p_action_id:ids[blockIndex]});
+          if(error)throw error;
+          if(!Array.isArray(data)||data.length!==chunk.length||data.some(x=>!x.id||!x.qr_token))throw new Error('Resposta incerta; consulte o inventário antes de repetir o bloco atual.');
+          created.push(...data);offset+=chunk.length;
+        }
+        form.classList.add('hidden');
+        const result=document.createElement('div');result.className='quick-register-result';
+        result.innerHTML=`<strong>${created.length} equipamentos importados</strong><p>Todos os blocos confirmados pelo Supabase. QR gerado para cada equipamento.</p><div class="quick-register-result-actions"><button type="button" class="button primary" id="quick-import-inventory">Ver inventário</button><button type="button" class="button ghost" id="quick-import-labels">Baixar etiquetas</button></div>`;
+        modal.querySelector('#quick-import').append(result);
+        $('#quick-import-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        $('#quick-import-labels',result).addEventListener('click',()=>downloadLabels(created,'Equipa-QR-importacao'));
+        notify(`${created.length} computadores importados.`,'success');
+      }catch(error){
+        errorBox.textContent=`${offset} de ${rows.length} confirmados. O próximo bloco não foi confirmado: ${registerError(error)}. Revise o inventário se houve perda de conexão.`;
+        errorBox.classList.remove('hidden');preview.querySelector('small').textContent=`${offset} de ${rows.length} confirmados. Sem repetir os blocos anteriores.`;
+        button.textContent=`Continuar do item ${offset+1}`;button.disabled=false;
+      }
+    });
+    return modal;
+  }
+
   async function openHub(initial='individual') {
     if(initial==='individual') return openQuickRegister();
+    if(initial==='batch') return openQuickBatch();
+    if(initial==='import') return openQuickImport();
     if(state.profile?.role!=='admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
     const modal=makeModal(`<div class="ref-modal-shell ref-register-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item" type="button" data-intake-mode="individual"><span>${uiIcon('equipment',18)}</span><div><strong>Individual</strong><small>Cadastrar um único equipamento</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="batch"><span>${uiIcon('grid',18)}</span><div><strong>Em lote</strong><small>Cadastrar vários equipamentos</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="import"><span>${uiIcon('upload',18)}</span><div><strong>Importar arquivo</strong><small>Excel, CSV ou planilha</small></div></button><button class="ref-modal-nav-item ghost-alt" type="button" id="eq-manage-models"><span>${uiIcon('admin',18)}</span><div><strong>Modelos técnicos</strong><small>Usar modelos pré-cadastrados</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Preencha apenas as informações que souber. Os campos opcionais podem ser completados depois.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div id="eq-intake-workspace" class="ref-register-workspace"><p class="muted">Carregando modelos…</p></div></div></div>`,true);
     const ctx={models:[],mode:initial,rows:[],actionId:null};

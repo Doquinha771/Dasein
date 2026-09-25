@@ -22,7 +22,7 @@ with sync_playwright() as pw:
    window.__quickCalls=[];
    supabase.rpc=async(name,args)=>{
       window.__quickCalls.push({name,args});
-      if(name==='equipa_quick_register_equipment') return {data:{id:'00000000-0000-4000-8000-000000000002',qr_token:'00000000-0000-4000-8000-000000000003',code:args.p_code},error:null};
+      if(name==='equipa_register_equipment_batch') return {data:[{id:'00000000-0000-4000-8000-000000000002',qr_token:'00000000-0000-4000-8000-000000000003',code:args.p_items[0].code}],error:null};
       throw Error('RPC inesperada '+name);
    };
   }""")
@@ -30,22 +30,27 @@ with sync_playwright() as pw:
   page.evaluate("window.EquipaInventory.openHub('individual')")
   page.locator('#quick-register-form').wait_for()
   assert page.locator('#quick-register-form [required]').count()==2
+  assert page.locator('#quick-register-form [name=serial_number]').is_visible()
   assert page.locator('#eq-intake-workspace').count()==0
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'), f'overflow {width}'
   page.locator('[name=code]').fill('NOTE-701')
   page.locator('[name=model]').fill('Positivo Motion')
   page.locator('[name=location_text]').fill('Sala 02')
+  page.locator('[name=serial_number]').fill('SERIE-701')
   page.locator('#quick-register-submit').click()
   page.locator('#quick-register-result').wait_for(state='visible',timeout=4000)
   calls=page.evaluate('window.__quickCalls')
-  assert len(calls)==1 and calls[0]['name']=='equipa_quick_register_equipment',calls
-  assert calls[0]['args']['p_code']=='NOTE-701' and calls[0]['args']['p_model']=='Positivo Motion'
-  assert calls[0]['args']['p_brand'] is None and calls[0]['args']['p_location_text']=='Sala 02'
+  assert len(calls)==1 and calls[0]['name']=='equipa_register_equipment_batch',calls
+  item=calls[0]['args']['p_items'][0]
+  assert item['code']=='NOTE-701' and item['model']=='Positivo Motion'
+  assert item['brand']=='Não informado' and item['location_text']=='Sala 02'
+  assert item['serial_number']=='SERIE-701'
   page.locator('#quick-register-again').click()
   assert page.locator('#quick-register-form').is_visible()
   assert page.locator('[name=code]').input_value()==''
   assert page.locator('[name=model]').input_value()=='Positivo Motion'
   assert page.locator('[name=location_text]').input_value()=='Sala 02'
+  assert page.locator('#quick-register-form [name=serial_number]').input_value()=='', 'série anterior não deve ser reaproveitada'
   assert page.locator('.modal-close-control').is_visible()
   page.locator('.modal-close-control').click()
   assert page.locator('#quick-register-form').count()==0

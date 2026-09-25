@@ -15,7 +15,7 @@ with sync_playwright() as pw:
     for width in (320,390,768,820):
         p=b.new_page(viewport={'width':width,'height':844},timezone_id='America/Sao_Paulo')
         errors=[];p.on('pageerror',lambda e:errors.append(str(e)))
-        p.route('**/*.supabase.co/**',lambda r:r.abort())
+        p.route('**/*.supabase.co/**',lambda r:r.fulfill(status=200,content_type='application/json',body='{"status":"ok"}') if r.request.url.split('/auth/v1/health')[0].endswith('.supabase.co') and r.request.url.endswith('/auth/v1/health') else r.abort())
         p.set_content(html,wait_until='domcontentloaded')
         p.locator('#login-form').wait_for(timeout=8000)
         p.evaluate("Object.defineProperty(window.crypto,'randomUUID',{configurable:true,value:()=>'00000000-0000-4000-8000-000000000003'})")

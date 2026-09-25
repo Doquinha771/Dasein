@@ -427,7 +427,7 @@ class EquipaSupabaseClient {
         headers: { ...authHeaders(), "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(params || {}),
         cache: "no-store"
-      });
+      }, name === "equipa_register_equipment_batch" || name === "equipa_quick_register_sequential" ? 60000 : NETWORK_TIMEOUT_MS);
       const payload = await parseResponse(response);
       if (!response.ok) return { data: null, error: errorFromPayload(payload, `Erro de operação (${response.status}).`) };
       return { data: payload, error: null };

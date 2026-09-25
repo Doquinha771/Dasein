@@ -759,15 +759,66 @@ async function renderDashboard() {
   qsa("[data-withdrawal-id]").forEach(b=>b.addEventListener("click",()=>openWithdrawalDetail(b.dataset.withdrawalId)));
   qs("#ref-add-equipment")?.addEventListener("click",()=>window.EquipaInventory?.openHub("individual"));
 }
-function closeContextMenu(){qs("#equipa-context-menu")?.remove()}
-function openContextMenu(x,y,items=[]){
+// Menu flutuante único: coordenadas de viewport e delegação para linhas recriadas por busca/paginação.
+let activeContextTrigger = null;
+let activeContextCleanup = null;
+function closeContextMenu(restoreFocus=false){
+  activeContextCleanup?.(); activeContextCleanup=null;
+  qs("#equipa-context-menu")?.remove();
+  const trigger=activeContextTrigger;
+  if(trigger?.isConnected)trigger.setAttribute("aria-expanded","false");
+  activeContextTrigger=null;
+  if(restoreFocus&&trigger?.isConnected)trigger.focus({preventScroll:true});
+}
+function openContextMenu(x,y,items=[],trigger=null){
   closeContextMenu();if(!items.length)return;
   const menu=document.createElement("div");menu.id="equipa-context-menu";menu.className="context-menu";
-  menu.innerHTML=items.map((item,i)=>item.separator?`<div class="context-separator"></div>`:`<button type="button" data-context-index="${i}" class="${item.danger?'danger':''}"><span class="context-icon">${contextActionIcon(item.icon||'view')}</span><div><strong>${esc(item.label)}</strong><small>${esc(item.hint||'')}</small></div></button>`).join("");
-  document.body.append(menu);const rect=menu.getBoundingClientRect();menu.style.left=`${Math.max(8,Math.min(x,innerWidth-rect.width-10))}px`;menu.style.top=`${Math.max(8,Math.min(y,innerHeight-rect.height-10))}px`;
-  qsa("[data-context-index]",menu).forEach(b=>b.addEventListener("click",e=>{e.stopPropagation();const item=items[Number(b.dataset.contextIndex)];closeContextMenu();item?.action?.()}));
-  const outside=e=>{if(menu.contains(e.target))return;document.removeEventListener("pointerdown",outside,true);closeContextMenu()};
-  setTimeout(()=>document.addEventListener("pointerdown",outside,true),0);
+  menu.setAttribute("role","menu");menu.setAttribute("aria-label","Ações disponíveis");
+  menu.innerHTML=items.map((item,i)=>item.separator?`<div class="context-separator" role="separator"></div>`:`<button type="button" role="menuitem" data-context-index="${i}" class="${item.danger?'danger':''}"><span class="context-icon">${contextActionIcon(item.icon||'view')}</span><div><strong>${esc(item.label)}</strong><small>${esc(item.hint||'')}</small></div></button>`).join("");
+  document.body.append(menu);
+  const viewport=window.visualViewport;
+  const bounds=()=>({left:viewport?.offsetLeft||0,top:viewport?.offsetTop||0,width:viewport?.width||window.innerWidth,height:viewport?.height||window.innerHeight});
+  const place=()=>{
+    const box=bounds();
+    const pad=8;
+    // O desktop usa body{zoom:1.2}; CSS left/top usam coordenadas pré-zoom.
+    const zoom=parseFloat(getComputedStyle(document.body).zoom)||1;
+    menu.style.maxWidth=`${Math.max(1,(box.width-pad*2)/zoom)}px`;
+    menu.style.maxHeight=`${Math.max(1,(box.height-pad*2)/zoom)}px`;
+    // Medir depois de limitar o tamanho impede que um menu longo fique fora da tela.
+    const rect=menu.getBoundingClientRect();
+    const maxX=box.left+box.width-rect.width-pad;
+    const maxY=box.top+box.height-rect.height-pad;
+    menu.style.left=`${Math.max(box.left+pad,Math.min(Number.isFinite(x)?x:box.left+pad,maxX))/zoom}px`;
+    // Próximo do rodapé, abrir acima do ponto acionado, sem ocultar as ações.
+    const desiredY=y+rect.height>box.top+box.height-pad ? y-rect.height : y;
+    menu.style.top=`${Math.max(box.top+pad,Math.min(Number.isFinite(desiredY)?desiredY:box.top+pad,maxY))/zoom}px`;
+  };
+  place();
+  activeContextTrigger=trigger;
+  if(trigger?.isConnected){trigger.setAttribute("aria-haspopup","menu");trigger.setAttribute("aria-expanded","true");}
+  qsa("[data-context-index]",menu).forEach(b=>b.addEventListener("click",e=>{
+    e.preventDefault();e.stopPropagation();
+    const item=items[Number(b.dataset.contextIndex)];closeContextMenu();item?.action?.();
+  }));
+  const outside=e=>{if(menu.contains(e.target)||activeContextTrigger?.contains(e.target))return;closeContextMenu();};
+  const escape=e=>{if(e.key==='Escape'){e.preventDefault();closeContextMenu(true);}};
+  const reposition=()=>{if(!menu.isConnected)return;place();};
+  const onScroll=e=>{if(menu.contains(e.target))return;closeContextMenu();};
+  document.addEventListener("pointerdown",outside,true);
+  document.addEventListener("keydown",escape,true);
+  document.addEventListener("scroll",onScroll,true);
+  window.addEventListener("resize",reposition);
+  viewport?.addEventListener("resize",reposition);
+  viewport?.addEventListener("scroll",reposition);
+  activeContextCleanup=()=>{
+    document.removeEventListener("pointerdown",outside,true);
+    document.removeEventListener("keydown",escape,true);
+    document.removeEventListener("scroll",onScroll,true);
+    window.removeEventListener("resize",reposition);
+    viewport?.removeEventListener("resize",reposition);
+    viewport?.removeEventListener("scroll",reposition);
+  };
 }
 async function deleteEquipment(id){
   if(state.profile?.role!=="admin")return notify("Somente o administrador pode remover equipamentos.","error");
@@ -802,27 +853,43 @@ function contextActionIcon(name){
 function bindEquipmentContextMenus(){ /* contexto tratado por delegação global */ }
 function equipmentRows(rows) {
   if(!rows.length)return `<div class="empty ref-inventory-empty">${uiIcon("inbox",34)}<strong>Nenhum equipamento encontrado.</strong><span>Altere os filtros para consultar o inventário.</span></div>`;
-  return `<div class="ref-inventory-table-wrap"><table class="ref-inventory-table"><thead><tr><th><input type="checkbox" id="equip-select-all" aria-label="Selecionar equipamentos desta página"></th><th>CÓDIGO</th><th>PATRIMÔNIO</th><th>MODELO</th><th>LOCALIZAÇÃO</th><th>SITUAÇÃO</th><th>ÚLTIMA ATIVIDADE</th><th>AÇÕES</th></tr></thead><tbody>${rows.map(e=>`<tr class="equipment-row" data-equipment="${esc(e.id)}" tabindex="0"><td><input type="checkbox" class="equip-row-select" value="${esc(e.id)}" aria-label="Selecionar ${esc(e.code)}"></td><td><div class="ref-equipment-cell"><span class="ref-equipment-icon">${uiIcon("equipment",19)}</span><div><strong>${esc(e.code)}</strong><small>${esc(e.label||schoolGroupLabel(e.school_group))}</small></div></div></td><td>${e.asset_tag?`<span class="ref-patrimony">${esc(e.asset_tag)}</span>`:`<span class="ref-patrimony ref-none">Não definido</span>`}</td><td>${esc(e.model||"Não informado")}</td><td><span class="ref-location">${uiIcon("tag",14)}${esc(e.location_text||"Não informada")}</span></td><td><span class="ref-state ref-state-${esc(e.status)}"><i></i>${esc(statusLabel(e.status))}</span></td><td>${esc(dt(e.updated_at))}</td><td><button type="button" class="ref-row-more" data-item-menu="${esc(e.id)}" aria-label="Ações de ${esc(e.code)}">···</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="ref-inventory-table-wrap"><table class="ref-inventory-table"><thead><tr><th><input type="checkbox" id="equip-select-all" aria-label="Selecionar equipamentos desta página"></th><th>CÓDIGO</th><th>PATRIMÔNIO</th><th>MODELO</th><th>LOCALIZAÇÃO</th><th>SITUAÇÃO</th><th>ÚLTIMA ATIVIDADE</th><th>AÇÕES</th></tr></thead><tbody>${rows.map(e=>`<tr class="equipment-row" data-equipment="${esc(e.id)}" tabindex="0"><td><input type="checkbox" class="equip-row-select" value="${esc(e.id)}" aria-label="Selecionar ${esc(e.code)}"></td><td><div class="ref-equipment-cell"><span class="ref-equipment-icon">${uiIcon("equipment",19)}</span><div><strong>${esc(e.code)}</strong><small>${esc(e.label||schoolGroupLabel(e.school_group))}</small></div></div></td><td>${e.asset_tag?`<span class="ref-patrimony">${esc(e.asset_tag)}</span>`:`<span class="ref-patrimony ref-none">Não definido</span>`}</td><td>${esc(e.model||"Não informado")}</td><td><span class="ref-location">${uiIcon("tag",14)}${esc(e.location_text||"Não informada")}</span></td><td><span class="ref-state ref-state-${esc(e.status)}"><i></i>${esc(statusLabel(e.status))}</span></td><td>${esc(dt(e.updated_at))}</td><td><button type="button" class="ref-row-more" data-item-menu="${esc(e.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="Ações de ${esc(e.code)}" title="Ações de ${esc(e.code)}">⋮</button></td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function bindEquipmentRowClicks(root = document) { qsa("[data-equipment]", root).forEach(r => {r.addEventListener("click",e=>{if(e.target.closest("input,[data-item-menu]"))return;openEquipment(r.dataset.equipment)});r.addEventListener("keydown",e=>{if(e.target===r&&(e.key==="Enter"||e.key===" ")){e.preventDefault();openEquipment(r.dataset.equipment)}})}); bindEquipmentContextMenus(root); }
 document.addEventListener("click",e=>{if(e.target.closest?.("[data-overdue-alert]")){state.withdrawalsStatus="overdue";navigate("withdrawals");}});
+function openEquipmentContextMenu(equipment,x,y,trigger=null){
+  if(!equipment||!state.profile)return;
+  const id=equipment.dataset.equipment;
+  if(!id)return;
+  const items=[{icon:"view",label:"Ver equipamento",hint:"Dados e disponibilidade",action:()=>openEquipment(id)}];
+  if(state.profile.role==="admin"){
+    items.push({icon:"edit",label:"Editar",hint:"Atualizar o cadastro",action:async()=>{try{openEquipmentForm(await getEquipment(id))}catch(error){notify(errText(error),"error")}}});
+    items.push({icon:"delete",label:"Apagar",hint:"Excluir cadastro ou retirar do inventário",danger:true,action:()=>deleteEquipment(id)});
+  }
+  openContextMenu(x,y,items,trigger);
+}
 function installGlobalContextMenus(){
   if(document.documentElement.dataset.contextReady)return;
   document.documentElement.dataset.contextReady="1";
+  // Captura o botão antes de handlers de linha/tabela e funciona após recarregar a lista.
+  document.addEventListener("click",e=>{
+    const button=e.target.closest?.("[data-item-menu]");
+    if(!button||!state.profile)return;
+    e.preventDefault();e.stopPropagation();
+    const row=button.closest("[data-equipment]");
+    if(!row)return;
+    if(qs("#equipa-context-menu")&&activeContextTrigger===button){closeContextMenu(true);return;}
+    const rect=button.getBoundingClientRect();
+    openEquipmentContextMenu(row,rect.left,rect.bottom+5,button);
+  },true);
   document.addEventListener("contextmenu",e=>{
     if(!state.profile)return;
     const admin=state.profile.role==="admin";
     const equipment=e.target.closest?.("[data-equipment]");
     if(equipment){
-      e.preventDefault();e.stopPropagation();const id=equipment.dataset.equipment;
-      const items=[{icon:"view",label:"Ver equipamento",hint:"Dados e disponibilidade",action:()=>openEquipment(id)}];
-      if(admin){
-        items.push({icon:"edit",label:"Editar",hint:"Atualizar o cadastro",action:async()=>{try{openEquipmentForm(await getEquipment(id))}catch(error){notify(errText(error),"error")}}});
-        items.push({icon:"delete",label:"Apagar",hint:"Excluir cadastro ou retirar do inventário",danger:true,action:()=>deleteEquipment(id)});
-      }else{
-      }
-      openContextMenu(e.clientX,e.clientY,items);return;
+      e.preventDefault();e.stopPropagation();
+      openEquipmentContextMenu(equipment,e.clientX,e.clientY);return;
     }
     const cart=e.target.closest?.("[data-cart-record]");
     if(cart){
@@ -1061,7 +1128,6 @@ async function refreshEquipmentSearch(){
  qs('#prev',host)?.addEventListener('click',()=>{state.equipmentPage--;refreshEquipmentSearch()});
  qs('#next',host)?.addEventListener('click',()=>{state.equipmentPage++;refreshEquipmentSearch()});
  qsa('.equip-row-select',host).forEach(cb=>cb.addEventListener('click',e=>e.stopPropagation()));
- qsa('[data-item-menu]',host).forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();const row=btn.closest('[data-equipment]');row?.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:btn.getBoundingClientRect().right-8,clientY:btn.getBoundingClientRect().bottom+2}))}));
  const selectAll=qs('#equip-select-all',host);
  selectAll?.addEventListener('change',e=>qsa('.equip-row-select',host).forEach(cb=>cb.checked=e.target.checked));
  const update=()=>{const selected=qsa('.equip-row-select:checked',host),btn=qs('#equipment-label-selected');if(btn){btn.hidden=!selected.length;btn.textContent=`PDF dos selecionados (${selected.length})`}};
@@ -1129,7 +1195,6 @@ async function renderEquipment() {
   qsa(".equip-row-select",host).forEach(cb=>{cb.addEventListener("click",e=>e.stopPropagation());cb.addEventListener("change",updateSelectedLabels)});
   qs("#equip-select-all")?.addEventListener("change",updateSelectedLabels);
   qs("#equipment-label-selected")?.addEventListener("click",()=>{const ids=new Set(qsa(".equip-row-select:checked",host).map(cb=>cb.value));const chosen=rows.filter(row=>ids.has(row.id));if(chosen.length)window.EquipaInventory?.downloadLabels(chosen,"Equipa-etiquetas-selecionadas")});
-  qsa("[data-item-menu]",host).forEach(btn=>btn.addEventListener("click",e=>{e.stopPropagation();const row=btn.closest("[data-equipment]");row?.dispatchEvent(new MouseEvent("contextmenu",{bubbles:true,cancelable:true,clientX:btn.getBoundingClientRect().right-8,clientY:btn.getBoundingClientRect().bottom+2}))}));
   qs("#new-equipment")?.addEventListener("click",()=>window.EquipaInventory.openHub("individual"));
   qs("#inventory-labels")?.addEventListener("click",()=>window.EquipaInventory.chooseLabels());
   qs("#import-equipment")?.addEventListener("click",()=>window.EquipaInventory.openHub("import"));
@@ -1147,7 +1212,30 @@ async function openEquipment(id) {
   qs("[data-delete]",modal)?.addEventListener("click",()=>{modal.remove();deleteEquipment(e.id)});
 }
 function openEquipmentForm(item=null) {
-  const m = makeModal(`<div class="panel-head"><div><span class="eyebrow">Administração</span><h2>${item?"Editar":"Novo"} equipamento</h2></div><button class="icon-button" data-close>×</button></div><div class="modal-body"><form id="equipment-form" class="form-grid"><label>Número / código<input name="code" required maxlength="80" value="${esc(item?.code||"")}"></label><label>Patrimônio<input name="asset_tag" maxlength="80" value="${esc(item?.asset_tag||"")}"></label><label>Grupo<select name="school_group"><option value="">Não definido</option>${schoolGroupOptions(item?.school_group||"")}</select></label><label>Número de série<input name="serial_number" maxlength="120" value="${esc(item?.serial_number||"")}"></label><label>Nome opcional<input name="label" maxlength="120" value="${esc(item?.label||"")}"></label><label>Localização<input name="location_text" maxlength="160" value="${esc(item?.location_text||"")}" placeholder="Ex.: Sala 12 / Carrinho 3"></label><label>Modelo<input name="model" required maxlength="120" value="${esc(item?.model||"")}"></label><label>Marca<input name="brand" maxlength="100" value="${esc(item?.brand||"")}" placeholder="Não informado"></label><label>Processador<input name="processor" maxlength="120" value="${esc(item?.processor||"")}"></label><label>RAM (GB)<input name="ram_gb" type="number" min="1" max="1024" value="${esc(item?.ram_gb??"")}"></label><label>Armazenamento (GB)<input name="storage_gb" type="number" min="1" max="1048576" value="${esc(item?.storage_gb??"")}"></label><label>Sistema operacional<input name="operating_system" maxlength="120" value="${esc(item?.operating_system||"")}"></label><label>Estado<select name="status">${["available","in_use","maintenance","unavailable"].map(s=>`<option value="${s}" ${item?.status===s?"selected":""}>${statusLabel(s)}</option>`).join("")}</select></label><label class="span-2">Observações<textarea name="notes" maxlength="1200" placeholder="Condição, acessórios ou informação útil">${esc(item?.notes||"")}</textarea></label><label class="check span-2"><input name="is_active" type="checkbox" ${item?.is_active!==false?"checked":""}><span>Equipamento ativo no catálogo</span></label><div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar</button></div></form></div>`, true);
+  if (!item) return window.EquipaInventory?.openHub("individual");
+  const m = makeModal(`<div class="panel-head"><div><h2>Editar equipamento</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div>
+    <div class="modal-body"><form id="equipment-form" class="form-grid">
+      <label>Número / código *<input name="code" required maxlength="80" value="${esc(item.code||"")}"></label>
+      <label>Modelo *<input name="model" required maxlength="120" value="${esc(item.model||"")}"></label>
+      <label class="span-2">Localização (opcional)<input name="location_text" maxlength="160" value="${esc(item.location_text||"")}" placeholder="Ex.: Sala 12 / Carrinho 3"></label>
+      <details class="equipment-edit-optional span-2"><summary>Outras informações (opcional)</summary>
+        <div class="form-grid">
+          <label>Patrimônio<input name="asset_tag" maxlength="80" value="${esc(item.asset_tag||"")}"></label>
+          <label>Fabricante<input name="brand" maxlength="100" value="${esc(item.brand||"")}" placeholder="Não informado"></label>
+          <label>Grupo<select name="school_group"><option value="">Não definido</option>${schoolGroupOptions(item.school_group||"")}</select></label>
+          <label>Número de série<input name="serial_number" maxlength="120" value="${esc(item.serial_number||"")}"></label>
+          <label>Nome opcional<input name="label" maxlength="120" value="${esc(item.label||"")}"></label>
+          <label>Processador<input name="processor" maxlength="120" value="${esc(item.processor||"")}"></label>
+          <label>RAM (GB)<input name="ram_gb" type="number" min="1" max="1024" value="${esc(item.ram_gb??"")}"></label>
+          <label>Armazenamento (GB)<input name="storage_gb" type="number" min="1" max="1048576" value="${esc(item.storage_gb??"")}"></label>
+          <label>Sistema operacional<input name="operating_system" maxlength="120" value="${esc(item.operating_system||"")}"></label>
+          <label>Estado<select name="status">${["available","in_use","maintenance","unavailable"].map(s=>`<option value="${s}" ${item.status===s?"selected":""}>${statusLabel(s)}</option>`).join("")}</select></label>
+          <label class="span-2">Observações<textarea name="notes" maxlength="1200" placeholder="Condição, acessórios ou informação útil">${esc(item.notes||"")}</textarea></label>
+          <label class="check span-2"><input name="is_active" type="checkbox" ${item.is_active!==false?"checked":""}><span>Equipamento ativo no catálogo</span></label>
+        </div>
+      </details>
+      <div class="modal-actions span-2"><button class="button" data-close type="button">Cancelar</button><button class="button primary" type="submit">Salvar alterações</button></div>
+    </form></div>`, true);
   qs("#equipment-form",m).addEventListener("submit",async ev=>{ev.preventDefault();const b=qs('button[type="submit"]',ev.currentTarget);setBusy(b,true,"Salvando…");const f=new FormData(ev.currentTarget);if(f.get("status")==="in_use" && item?.status!=="in_use") {setBusy(b,false);return notify("Para colocar um equipamento em uso, registre uma retirada.","warning");}
     if(item && item.status==="in_use" && f.get("status")!=="in_use") { setBusy(b,false);return notify("Registre a devolução para alterar o estado de um equipamento em uso.","warning"); }
     if(f.get("status")==="maintenance" && item?.status!=="maintenance") {setBusy(b,false);return notify("Para colocar em manutenção, abra uma ocorrência técnica.","warning");}

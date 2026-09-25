@@ -1813,6 +1813,8 @@ body:has(#app .auth-shell){zoom:1!important}
 .quick-register-form{display:grid;gap:15px}.quick-register-form label{display:grid;gap:6px;min-width:0;font-size:13px;color:var(--ink)}
 .quick-register-form label small{font-size:11px;color:var(--muted);font-weight:400}
 .quick-register-form input{height:47px;min-width:0;background:var(--surface);border-color:var(--line);color:var(--ink)}
+.quick-register-form textarea{display:block;width:100%;min-width:0;min-height:66px;max-height:180px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;line-height:1.45}
+.quick-register-form textarea::placeholder{color:var(--muted)}
 .quick-register-optional{border:1px solid var(--line);border-radius:11px;padding:10px 13px;background:var(--surface-soft);color:var(--ink)}
 .quick-register-optional summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink)}
 .quick-register-optional>div{display:grid;gap:12px;padding-top:12px}
@@ -1824,7 +1826,55 @@ body:has(#app .auth-shell){zoom:1!important}
 html[data-theme="dark"] .quick-register,html[data-theme="dark"] .quick-register-head h2,html[data-theme="dark"] .quick-register-form label,html[data-theme="dark"] .quick-register-result strong,html[data-theme="dark"] .quick-register-result p{color:var(--ink)!important}
 html[data-theme="dark"] .quick-register-optional{background:var(--surface)!important;border-color:var(--line)!important}
 html[data-theme="dark"] .quick-register-form input{background:#21354e!important;color:#f0f6ff!important;border-color:#486180!important}
+html[data-theme="dark"] .quick-register-form textarea{background:#21354e!important;color:#f0f6ff!important;border-color:#486180!important}
 html[data-theme="dark"] .quick-register-form input::placeholder{color:#b6c8df!important}
 html[data-theme="dark"] .quick-register-error{color:#ffc7cc;background:#57252e;border-color:#a94650}
 html[data-theme="dark"] .quick-register-links button{color:#a5c6ff}
 @media(max-width:540px){.quick-register{padding:22px 16px 18px}.quick-register-head h2{font-size:22px}.quick-register-result-actions>.button{flex:1 1 125px}}
+
+/* 0.3.0: cadastros individual, sequencial e por arquivo em formulários compactos */
+.quick-batch-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
+.quick-batch-pair>label{min-width:0}.quick-batch-pair input{width:100%;min-width:0}
+.quick-batch-preview,.quick-import-preview{display:grid;gap:5px;padding:12px;border:1px solid var(--line);border-radius:11px;background:var(--surface-soft);color:var(--ink);font-size:13px;overflow-wrap:anywhere}
+.quick-batch-preview span,.quick-import-preview small{color:var(--muted);font-size:12px}
+.quick-import-preview ul{padding-left:20px;margin:5px 0 2px;max-height:130px;overflow:auto}
+.quick-import-preview li{margin:0 0 4px;overflow-wrap:anywhere}.quick-import-errors{color:#ac2430;font-size:12px;line-height:1.5}
+.quick-import .quick-register-form input[type=file]{height:auto;max-width:100%;padding:11px 8px;font-size:12px}
+html[data-theme="dark"] .quick-batch-preview,html[data-theme="dark"] .quick-import-preview{background:#21354e!important;border-color:#486180!important;color:#f0f6ff!important}
+html[data-theme="dark"] .quick-import-errors{color:#ffc3c9}
+@media(max-width:360px){.quick-batch-pair{gap:8px}.quick-batch-pair input{font-size:14px}}
+
+.equipment-edit-optional{padding:13px;border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);color:var(--ink)}
+.equipment-edit-optional summary{cursor:pointer;font-size:13px;font-weight:700;color:var(--ink)}
+.equipment-edit-optional>div{margin-top:14px}
+html[data-theme="dark"] .equipment-edit-optional{background:var(--surface)!important;border-color:var(--line)!important}
+
+/* Equipa 0.3.2: ações visíveis mesmo em tabelas mais largas que a janela. */
+.context-menu{position:fixed!important;z-index:3000!important;box-sizing:border-box!important;
+  max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow-y:auto;
+  overscroll-behavior:contain;touch-action:pan-y;white-space:normal;
+  color:var(--ink);background:var(--surface);border-color:var(--line);
+}
+.context-menu button{cursor:pointer;min-width:0}
+.context-menu button:focus-visible,.ref-row-more:focus-visible{outline:3px solid #2b6bde;outline-offset:2px}
+.ref-row-more{position:relative;z-index:1;min-width:44px;min-height:44px;width:44px;height:44px;
+ display:inline-flex;align-items:center;justify-content:center;font-size:23px!important;cursor:pointer}
+@media (min-width:821px){
+ .ref-inventory-table-wrap{position:relative}
+ .ref-inventory-table th:last-child,.ref-inventory-table td:last-child{position:sticky;right:0;
+  z-index:2;min-width:70px;width:70px;background:var(--surface,#fff);
+  box-shadow:-10px 0 12px -12px rgba(28,49,78,.34)}
+ .ref-inventory-table tbody tr:hover td:last-child{background:var(--surface-soft)}
+ .ref-inventory-table-wrap.ref-compact-grid .ref-inventory-table th:last-child,
+ .ref-inventory-table-wrap.ref-compact-grid .ref-inventory-table td:last-child{
+  position:static;min-width:0;width:auto;box-shadow:none}
+}
+@media (max-width:820px){
+ .ref-inventory-table tbody tr{grid-template-columns:24px minmax(0,1fr) minmax(68px,auto)!important}
+ .ref-inventory-table tbody tr td:nth-child(6){max-width:98px;min-width:0;white-space:normal;justify-self:end}
+ .ref-inventory-table tbody tr td:nth-child(8){min-width:44px;justify-self:end;align-self:center}
+ .ref-row-more{min-width:44px!important;min-height:44px!important;width:44px!important;height:44px!important;font-size:23px!important}
+}
+html[data-theme="dark"] .context-menu,html[data-theme="dark"] .ref-inventory-table th:last-child,
+html[data-theme="dark"] .ref-inventory-table td:last-child{background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .context-menu button:hover{background:var(--surface-soft)!important}
