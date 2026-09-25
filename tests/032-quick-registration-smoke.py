@@ -31,7 +31,8 @@ with sync_playwright() as pw:
   page.locator('#quick-register-form').wait_for()
   assert page.locator('#quick-register-form [required]').count()==2
   assert page.locator('#quick-register-form [name=serial_number]').is_visible()
-  assert page.locator('#eq-intake-workspace').count()==0
+  assert page.locator('#eq-intake-workspace').count()==1
+  assert page.locator('[data-intake-mode="individual"].active').count()==1
   assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'), f'overflow {width}'
   page.locator('[name=code]').fill('NOTE-701')
   page.locator('[name=model]').fill('Positivo Motion')

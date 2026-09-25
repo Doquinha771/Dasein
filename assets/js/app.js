@@ -1136,7 +1136,7 @@ async function refreshEquipmentSearch(){
  qs('#equipment-label-selected')?.addEventListener('click',()=>{const ids=new Set(qsa('.equip-row-select:checked',host).map(cb=>cb.value));const chosen=rows.filter(row=>ids.has(row.id));if(chosen.length)window.EquipaInventory?.downloadLabels(chosen,'Equipa-etiquetas-selecionadas')},{once:true});
 }
 async function renderEquipment() {
-  ++equipmentSearchGeneration;
+  const generation=++equipmentSearchGeneration;
   state.view = "equipment";
   const admin = state.profile.role === "admin";
   const from = state.equipmentPage * config.pageSize;
@@ -1147,7 +1147,9 @@ async function renderEquipment() {
   <section class="ref-results-panel"><header class="ref-results-heading"><strong id="equipment-count">Consultando equipamentos...</strong><div class="ref-display-controls"><button id="equipment-label-selected" type="button" class="ref-outline-action" hidden>PDF dos selecionados</button><button type="button" class="ref-display-button active" id="equip-list-view" aria-label="Visualização em lista">${uiIcon("list",19)}</button><button type="button" class="ref-display-button" id="equip-grid-view" aria-label="Visualização em grade">${uiIcon("grid",19)}</button><select id="equipment-sort" aria-label="Ordenar equipamentos"><option value="code">Código</option><option value="recent">Mais recentes</option></select></div></header><div id="equipment-results"><div class="loading">Carregando equipamentos…</div></div></section></section>`);
   const host = qs("#equipment-results");
   const search = cleanSearch(state.equipmentSearch);
-  const fields="id,code,asset_tag,brand,model,label,school_group,serial_number,location_text,notes,status,is_active,created_at,updated_at,qr_token";
+  // A listagem não precisa transferir observações e fichas técnicas: os detalhes
+  // são consultados separadamente ao abrir cada equipamento.
+  const fields="id,code,asset_tag,model,label,school_group,location_text,status,is_active,updated_at,qr_token";
   let query=supabase.from("equipments").select(fields,{count:"exact"});
   if(state.equipmentFilters.active==="active")query=query.eq("is_active",true);
   if(state.equipmentFilters.active==="inactive")query=query.eq("is_active",false);
@@ -1163,6 +1165,8 @@ async function renderEquipment() {
     }
   }
   const result=await (state.equipmentSort==="recent"?query.order("updated_at",{ascending:false}):query.order("code")).range(from,to);
+  // Ignora respostas de consultas anteriores à nova busca ou ao novo cadastro.
+  if(generation!==equipmentSearchGeneration||state.view!=="equipment"||!host.isConnected)return;
   const rows=result.data||[];
   const count=result.count||0;
   const error=result.error;

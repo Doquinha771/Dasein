@@ -1878,3 +1878,19 @@ html[data-theme="dark"] .equipment-edit-optional{background:var(--surface)!impor
 html[data-theme="dark"] .context-menu,html[data-theme="dark"] .ref-inventory-table th:last-child,
 html[data-theme="dark"] .ref-inventory-table td:last-child{background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
 html[data-theme="dark"] .context-menu button:hover{background:var(--surface-soft)!important}
+
+/* 0.3.3: navegação de cadastro recuperada, com campos na ordem do cadastro rápido. */
+.ref-register-modal .quick-register{box-sizing:border-box;width:100%;max-width:none;padding:0;min-width:0}
+.ref-register-modal .quick-register-head{padding-right:0;margin-bottom:14px}
+.ref-register-modal .quick-register-head h2{font-size:clamp(19px,2vw,23px)}
+.ref-register-modal .quick-register-links{display:none}
+.ref-register-modal .quick-register-result{padding:14px 0 8px}
+.ref-register-modal #eq-intake-workspace{position:relative;min-width:0}
+.ref-register-modal .quick-register-form{min-width:0}
+.ref-register-modal .ref-modal-nav-item:focus-visible{outline:3px solid #769bed;outline-offset:2px}
+@media(max-width:820px){
+  .ref-register-modal .quick-register{padding:0!important}
+  .ref-register-modal .quick-register-head{margin-bottom:12px}
+  .ref-register-modal .quick-register-form{gap:12px}
+}
+html[data-theme="dark"] .ref-register-modal .ref-register-workspace{background:var(--surface)!important;color:var(--ink)!important}

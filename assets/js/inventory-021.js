@@ -20,6 +20,24 @@
     if (/EQUIPA_MODEL_NOT_FOUND/.test(raw)) return 'O modelo escolhido não está mais disponível. Selecione outro modelo.';
     return errText(error);
   };
+  // Atualiza apenas o inventário depois do commit confirmado. Um refresh completo
+  // da página encerraria a sessão do modal e perderia a próxima sequência.
+  function refreshAfterRegistration() {
+    state.equipmentPage=0;
+    state.equipmentSearch='';
+    state.equipmentFilters={status:'',active:'active',group:'',location:'',model:''};
+    state.equipmentSort='recent';
+    if(state.view==='equipment') {
+      void renderEquipment().catch(error=>notify(`Cadastro salvo, mas não foi possível atualizar a lista: ${registerError(error)}`,'warning'));
+    }
+  }
+  function mountIntakeForm(parentModal, html) {
+    if (!parentModal) return makeModal(html);
+    const target=$('#eq-intake-workspace',parentModal);
+    if(!target)throw new Error('Área de cadastro indisponível.');
+    target.innerHTML=html;
+    return parentModal;
+  }
   async function loadModels() {
     const {data,error} = await supabase.from('equipment_models').select('id,name,manufacturer,school_group,processor,ram_gb,storage_gb,operating_system').order('name').limit(300);
     if (error) throw error;
@@ -242,9 +260,9 @@
   }
   // Cadastro rápido: 2 campos obrigatórios, uma única RPC transacional, sem prévia.
   // Cadastro em lote e importação continuam disponíveis separadamente.
-  function openQuickRegister() {
+  function openQuickRegister(parentModal=null) {
     if (state.profile?.role !== 'admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
-    const modal=makeModal(`<div class="quick-register">
+    const modal=mountIntakeForm(parentModal,`<div class="quick-register">
       <header class="quick-register-head"><span class="eyebrow">Inventário</span><h2>Cadastrar computador</h2><p>Preencha o número e o modelo. Os demais dados podem ser adicionados depois.</p></header>
       <form id="quick-register-form" class="quick-register-form">
         <label>Número do equipamento *<input name="code" required maxlength="80" autocomplete="off" placeholder="Ex.: NOTE-001" aria-describedby="quick-number-hint"><small id="quick-number-hint">Identificação única na escola.</small></label>
@@ -264,15 +282,15 @@
     const form=$('#quick-register-form',modal),submit=$('#quick-register-submit',modal),result=$('#quick-register-result',modal),errorBox=$('#quick-register-error',modal);
     let actionId=null;
     form.addEventListener('input',()=>{if(!submit.disabled){actionId=null;errorBox.classList.add('hidden');}});
-    $('#quick-register-batch',modal).addEventListener('click',()=>{modal.remove();void openHub('batch');});
-    $('#quick-register-import',modal).addEventListener('click',()=>{modal.remove();void openHub('import');});
+    $('#quick-register-batch',modal).addEventListener('click',()=>{if(parentModal)parentModal.querySelector('[data-intake-mode="batch"]')?.click();else{modal.remove();void openHub('batch');}});
+    $('#quick-register-import',modal).addEventListener('click',()=>{if(parentModal)parentModal.querySelector('[data-intake-mode="import"]')?.click();else{modal.remove();void openHub('import');}});
     form.addEventListener('submit',async event=>{
       event.preventDefault();if(submit.disabled)return;
       const f=new FormData(form);
       const args={p_code:clean(f.get('code')),p_model:clean(f.get('model')),p_serial_number:clean(f.get('serial_number'))||null,p_location_text:clean(f.get('location_text'))||null,p_brand:clean(f.get('brand'))||null,p_asset_tag:clean(f.get('asset_tag'))||null};
       if(!args.p_code||!args.p_model){form.reportValidity();return;}
       actionId ||= crypto.randomUUID();
-      submit.disabled=true;submit.textContent='Salvando…';errorBox.classList.add('hidden');
+      submit.disabled=true;submit.textContent='Salvando…';errorBox.classList.add('hidden');modal.dataset.intakeSaving='1';
       try {
         // A RPC de lote já aceita série opcional e preserva a mesma autorização,
         // geração de QR e idempotência do cadastro rápido, numa única chamada.
@@ -284,6 +302,7 @@
         if(error)throw error;
         const data=Array.isArray(batchData)&&batchData.length===1?batchData[0]:null;
         if(!data?.id||!data?.qr_token||data?.code!==args.p_code)throw new Error('Resposta inesperada do cadastro. Consulte o inventário antes de tentar novamente.');
+        refreshAfterRegistration();
         form.classList.add('hidden');
         const model=args.p_model,local=args.p_location_text||'',brand=args.p_brand||'';
         result.classList.remove('hidden');
@@ -293,21 +312,21 @@
           result.classList.add('hidden');result.replaceChildren();form.classList.remove('hidden');submit.disabled=false;submit.textContent='Cadastrar equipamento';form.elements.code.focus();
         });
         $('#quick-register-print',result).addEventListener('click',()=>downloadLabels([data],`Equipa-QR-${data.code}`));
-        $('#quick-register-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        $('#quick-register-inventory',result).addEventListener('click',()=>{modal.remove();});
         notify(`${data.code} cadastrado no inventário.`,'success');
       } catch(error) {
         errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');
         submit.disabled=false;submit.textContent='Tentar novamente';
-      }
+      } finally {delete modal.dataset.intakeSaving;}
     });
     form.elements.code.focus();
     return modal;
   }
   // Cadastro sequencial: 5 entradas compartilhadas -> 1 RPC para até 200 computadores.
   // Nada de 200 formulários, 200 verificações remotas ou PDF pesado na confirmação.
-  function openQuickBatch() {
+  function openQuickBatch(parentModal=null) {
     if (state.profile?.role !== 'admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
-    const modal=makeModal(`<div class="quick-register quick-batch" id="quick-batch">
+    const modal=mountIntakeForm(parentModal,`<div class="quick-register quick-batch" id="quick-batch">
       <header class="quick-register-head"><h2>Cadastrar vários computadores</h2><p>Informe a sequência e o modelo uma única vez. O banco gera os códigos e QR Codes.</p></header>
       <form id="quick-batch-form" class="quick-register-form">
         <label>Prefixo do número (opcional)<input name="prefix" maxlength="30" placeholder="Ex.: NOTE-" autocomplete="off"></label>
@@ -351,7 +370,7 @@
     form.addEventListener('submit',async event=>{
       event.preventDefault();if(button.disabled||button.dataset.busy)return;
       const args=calculate();if(!args||!args.p_model){form.reportValidity();return;}
-      actionId ||= crypto.randomUUID();button.dataset.busy='1';button.disabled=true;button.textContent='Salvando lote…';errorBox.classList.add('hidden');
+      actionId ||= crypto.randomUUID();button.dataset.busy='1';button.disabled=true;button.textContent='Salvando lote…';errorBox.classList.add('hidden');modal.dataset.intakeSaving='1';
       try{
         const {serials,...sequentialArgs}=args;
         const rpcName=serials.length?'equipa_register_equipment_batch':'equipa_quick_register_sequential';
@@ -364,10 +383,11 @@
         const {data,error}=await supabase.rpc(rpcName,rpcArgs);
         if(error)throw error;
         if(!Array.isArray(data)||data.length!==args.p_quantity||data.some(x=>!x.id||!x.qr_token))throw new Error('Resposta incerta. Confira o inventário antes de repetir o lote.');
+        refreshAfterRegistration();
         form.classList.add('hidden');result.classList.remove('hidden');
         result.innerHTML=`<strong>${data.length} computadores cadastrados</strong><p>${escape(data[0].code)} até ${escape(data[data.length-1].code)}</p><small>QRs permanentes gerados. Baixar as etiquetas é opcional.</small><div class="quick-register-result-actions"><button class="button primary" id="quick-batch-next" type="button">Cadastrar próximo lote</button><button class="button ghost" id="quick-batch-labels" type="button">Baixar etiquetas</button><button class="button ghost" id="quick-batch-inventory" type="button">Ver inventário</button></div>`;
         $('#quick-batch-labels',result).addEventListener('click',()=>downloadLabels(data,'Equipa-QR-lote'));
-        $('#quick-batch-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        $('#quick-batch-inventory',result).addEventListener('click',()=>{modal.remove();});
         $('#quick-batch-next',result).addEventListener('click',()=>{
           actionId=null;const next=Number(args.p_start)+args.p_quantity;
           form.elements.start.value=String(next).padStart(args.p_start.length,'0');
@@ -376,7 +396,8 @@
           delete button.dataset.busy;button.textContent='Cadastrar lote';calculate();form.elements.start.focus();
         });
         notify(`${data.length} computadores registrados no Supabase.`,'success');
-      }catch(error){errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');button.textContent='Tentar novamente';button.disabled=false;delete button.dataset.busy;}
+      }catch(error){errorBox.textContent=registerError(error);errorBox.classList.remove('hidden');button.textContent='Tentar novamente';button.disabled=false;}
+      finally{delete button.dataset.busy;delete modal.dataset.intakeSaving;}
     });
     calculate();form.elements.prefix.focus();return modal;
   }
@@ -384,9 +405,9 @@
   // Importação rápida: códigos + modelo (na linha ou compartilhado). No máximo 2.000
   // itens por arquivo, 200 por transação. Só avança após confirmar o lote anterior.
   // IDs por lote permanecem estáveis em tentativas após timeout de rede.
-  function openQuickImport(){
+  function openQuickImport(parentModal=null){
     if(state.profile?.role!=='admin')return notify('Apenas administradores podem cadastrar equipamentos.','error');
-    const modal=makeModal(`<div class="quick-register quick-import" id="quick-import"><header class="quick-register-head"><h2>Importar computadores</h2><p>Uma planilha com Número e Modelo é suficiente. Até 2.000 equipamentos por arquivo, em blocos de 200.</p></header>
+    const modal=mountIntakeForm(parentModal,`<div class="quick-register quick-import" id="quick-import"><header class="quick-register-head"><h2>Importar computadores</h2><p>Uma planilha com Número e Modelo é suficiente. Até 2.000 equipamentos por arquivo, em blocos de 200.</p></header>
       <form id="quick-import-form" class="quick-register-form"><label>Arquivo CSV, Excel ou Word<input type="file" name="file" accept=".csv,.xlsx,.docx" required></label>
       <label>Modelo para linhas sem modelo (opcional)<input name="model" maxlength="120" placeholder="Ex.: Positivo Motion"></label>
       <label>Local para linhas sem local (opcional)<input name="location_text" maxlength="160" placeholder="Ex.: Sala 3"></label>
@@ -414,7 +435,7 @@
     form.addEventListener('submit',async event=>{
       event.preventDefault();if(!rows.length||button.disabled)return;
       if(validateRows(rows).some(x=>x.problems.length))return refresh();
-      button.disabled=true;form.elements.file.disabled=true;form.elements.model.readOnly=true;form.elements.location_text.readOnly=true;
+      button.disabled=true;form.elements.file.disabled=true;form.elements.model.readOnly=true;form.elements.location_text.readOnly=true;modal.dataset.intakeSaving='1';
       errorBox.classList.add('hidden');
       try{
         while(offset<rows.length){
@@ -428,33 +449,51 @@
           if(!Array.isArray(data)||data.length!==chunk.length||data.some(x=>!x.id||!x.qr_token))throw new Error('Resposta incerta; consulte o inventário antes de repetir o bloco atual.');
           created.push(...data);offset+=chunk.length;
         }
+        refreshAfterRegistration();
         form.classList.add('hidden');
         const result=document.createElement('div');result.className='quick-register-result';
         result.innerHTML=`<strong>${created.length} equipamentos importados</strong><p>Todos os blocos confirmados pelo Supabase. QR gerado para cada equipamento.</p><div class="quick-register-result-actions"><button type="button" class="button primary" id="quick-import-inventory">Ver inventário</button><button type="button" class="button ghost" id="quick-import-labels">Baixar etiquetas</button></div>`;
         modal.querySelector('#quick-import').append(result);
-        $('#quick-import-inventory',result).addEventListener('click',()=>{modal.remove();renderEquipment();});
+        $('#quick-import-inventory',result).addEventListener('click',()=>{modal.remove();});
         $('#quick-import-labels',result).addEventListener('click',()=>downloadLabels(created,'Equipa-QR-importacao'));
         notify(`${created.length} computadores importados.`,'success');
       }catch(error){
+        if(offset>0)refreshAfterRegistration();
         errorBox.textContent=`${offset} de ${rows.length} confirmados. O próximo bloco não foi confirmado: ${registerError(error)}. Revise o inventário se houve perda de conexão.`;
         errorBox.classList.remove('hidden');preview.querySelector('small').textContent=`${offset} de ${rows.length} confirmados. Sem repetir os blocos anteriores.`;
         button.textContent=`Continuar do item ${offset+1}`;button.disabled=false;
-      }
+      }finally{delete modal.dataset.intakeSaving;}
     });
     return modal;
   }
 
   async function openHub(initial='individual') {
-    if(initial==='individual') return openQuickRegister();
-    if(initial==='batch') return openQuickBatch();
-    if(initial==='import') return openQuickImport();
     if(state.profile?.role!=='admin') return notify('Apenas administradores podem cadastrar equipamentos.','error');
     const modal=makeModal(`<div class="ref-modal-shell ref-register-modal"><aside class="ref-modal-nav"><div class="ref-modal-nav-head"><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><div class="ref-modal-nav-list"><button class="ref-modal-nav-item" type="button" data-intake-mode="individual"><span>${uiIcon('equipment',18)}</span><div><strong>Individual</strong><small>Cadastrar um único equipamento</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="batch"><span>${uiIcon('grid',18)}</span><div><strong>Em lote</strong><small>Cadastrar vários equipamentos</small></div></button><button class="ref-modal-nav-item" type="button" data-intake-mode="import"><span>${uiIcon('upload',18)}</span><div><strong>Importar arquivo</strong><small>Excel, CSV ou planilha</small></div></button><button class="ref-modal-nav-item ghost-alt" type="button" id="eq-manage-models"><span>${uiIcon('admin',18)}</span><div><strong>Modelos técnicos</strong><small>Usar modelos pré-cadastrados</small></div></button></div><div class="ref-modal-tip"><strong>Dica</strong><p>Preencha apenas as informações que souber. Os campos opcionais podem ser completados depois.</p></div></aside><div class="ref-modal-content"><div class="ref-modal-top"><div><span class="eyebrow">Inventário · Cadastro</span><h2>Cadastrar equipamentos</h2><p>Adicione um novo equipamento ao inventário da escola.</p></div><button class="button ghost" data-close type="button">Fechar</button></div><div id="eq-intake-workspace" class="ref-register-workspace"><p class="muted">Carregando modelos…</p></div></div></div>`,true);
+    // Recupera o antigo menu de cadastro, mas mantém os formulários rápidos:
+    // individual, sequência e importação compartilham a mesma janela.
     const ctx={models:[],mode:initial,rows:[],actionId:null};
-    try{ctx.models=await loadModels();}catch(error){notify(registerError(error),'error');modal.remove();return;}
-    modal.querySelectorAll('[data-intake-mode]').forEach(b=>b.addEventListener('click',()=>renderMode(modal,ctx,b.dataset.intakeMode)));
-    $('#eq-manage-models',modal).addEventListener('click',()=>openModelManager(modal,ctx));
-    renderMode(modal,ctx,initial);
+    const switchMode=mode=>{
+      if(modal.dataset.intakeSaving==='1')return notify('Aguarde a confirmação do cadastro atual.','warning');
+      if(!['individual','batch','import'].includes(mode))return;
+      ctx.mode=mode;
+      modal.querySelectorAll('[data-intake-mode]').forEach(button=>{
+        const active=button.dataset.intakeMode===mode;
+        button.classList.toggle('active',active);
+        if(active)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');
+      });
+      if(mode==='individual')openQuickRegister(modal);
+      else if(mode==='batch')openQuickBatch(modal);
+      else openQuickImport(modal);
+    };
+    modal.querySelectorAll('[data-intake-mode]').forEach(b=>b.addEventListener('click',()=>switchMode(b.dataset.intakeMode)));
+    $('#eq-manage-models',modal).addEventListener('click',async()=>{
+      if(modal.dataset.intakeSaving==='1')return;
+      try{ctx.models=await loadModels();openModelManager(modal,ctx);}
+      catch(error){notify(registerError(error),'error');}
+    });
+    switchMode(initial);
+    return modal;
   }
   function openModelManager(parent,ctx) {
     const modal=makeModal(`<div class="panel-head"><div><span class="eyebrow">Catálogo técnico</span><h2>Salvar modelo reutilizável</h2></div><button class="icon-button" data-close aria-label="Fechar">×</button></div><div class="modal-body"><form id="eq-model-form" class="form-grid"><label>Nome/modelo<input name="name" maxlength="120" required placeholder="ThinkPad L14"></label><label>Fabricante<input name="manufacturer" maxlength="100" required placeholder="Lenovo"></label><label>Grupo<select name="school_group">${groupOptions()}</select></label><label>Processador<input name="processor" maxlength="120"></label><label>RAM (GB)<input name="ram_gb" type="number" min="1" max="1024" step="1"></label><label>Armazenamento (GB)<input name="storage_gb" type="number" min="1" max="1048576" step="1"></label><label>Sistema operacional<input name="operating_system" maxlength="120"></label><div class="modal-actions span-2"><button class="button primary" type="submit">Salvar modelo</button></div></form><div id="eq-saved-models" class="eq-saved-models"></div></div>`,true);
